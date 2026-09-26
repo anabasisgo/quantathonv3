@@ -6,7 +6,10 @@ import re
 from collections import Counter
 from pathlib import Path
 
+from tree_runtime import RuntimeModel as TreeRuntimeModel
+
 CAP_SECONDS = 4 * 60 * 60
+TIMEOUT_CUTOFF = {16: 14000.0, 64: 14399.99, 512: 12500.0}
 FEATURES = (
     "log_qubits", "log_ops", "log_depth", "log_1q", "log_2q",
     "log_multi", "log_cx", "log_swap", "log_measure", "log_reset",
@@ -234,11 +237,14 @@ class RuntimeModel:
         if not path.exists():
             path = Path(__file__).resolve().parent / artifacts_dir / "runtime_model.json"
         self.model = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+        tree_dir = None if Path(artifacts_dir) == Path("artifacts") else artifacts_dir
+        self.tree_model = TreeRuntimeModel(artifacts_dir=tree_dir)
 
     def featurize(self, qasm_text: str) -> dict:
-        return featurize(qasm_text)
+        return {"knn": featurize(qasm_text),
+                "tree": self.tree_model.featurize(qasm_text)}
 
-    def predict(self, features: dict, threshold: int) -> float:
+    def _predict_knn(self, features: dict, threshold: int) -> float:
         if self.model and self.model.get("kind") in {"knn-v1", "knn-v2"} and str(threshold) in self.model["by_threshold"]:
             log_seconds = _knn_log_duration(features, self.model["by_threshold"][str(threshold)])
         elif self.model:
@@ -254,3 +260,11 @@ class RuntimeModel:
         if log_seconds >= math.log10(CAP_SECONDS):
             return float(CAP_SECONDS)
         return float(max(0.001, 10 ** log_seconds))
+
+    def predict(self, features: dict, threshold: int) -> float:
+        """Blend held-out complementary models; cap only high-confidence KNN risks."""
+        knn_seconds = self._predict_knn(features["knn"], threshold)
+        if knn_seconds >= TIMEOUT_CUTOFF.get(threshold, CAP_SECONDS):
+            return float(CAP_SECONDS)
+        tree_seconds = self.tree_model.predict(features["tree"], threshold)
+        return float(min(CAP_SECONDS, math.sqrt(knn_seconds * tree_seconds)))
