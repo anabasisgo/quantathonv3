@@ -1,3 +1,5 @@
 training_circuits/*.zst filter=lfs diff=lfs merge=lfs -text
 quantathon-harness/artifacts/* filter=lfs diff=lfs merge=lfs -text
 reports/* filter=lfs diff=lfs merge=lfs -text
+reports/**/* filter=lfs diff=lfs merge=lfs -text
+reports/runtime-errors/* filter=lfs diff=lfs merge=lfs -text
