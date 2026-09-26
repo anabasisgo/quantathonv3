@@ -134,7 +134,8 @@ def plot_overview(rows, summary, output):
     fig.suptitle("Runtime model | held-out prediction errors", x=.08, y=.975,
                  ha="left", fontsize=22, fontweight="bold")
     fig.text(.08, .932, "5-fold validation grouped by circuit features · "
-             f"{summary['runs']:,} runs · {summary['circuits']} circuits · 200 Extra Trees",
+             f"{summary['runs']:,} runs · {summary['circuits']} circuits · "
+             + summary.get("model_description", "200 Extra Trees"),
              fontsize=11, color="#536171")
     fig.text(.08, .89, f"R² seconds  {summary['r2_seconds']:.3f}     "
              f"R² log-seconds  {summary['r2_log10_seconds']:.3f}     "
@@ -160,10 +161,11 @@ def plot_overview(rows, summary, output):
     ax.axhspan(-math.log10(2), math.log10(2), color="#BAC5D1", alpha=.18)
     for y in (-1, 0, 1):
         ax.axhline(y, color="#657285", linewidth=.8, linestyle="-" if y == 0 else "--")
+    extent = max(3.6, max(abs(r["log10_ratio"]) for r in rows) + .25)
+    ticks = list(range(-int(extent), int(extent) + 1))
     ax.set(xscale="log", xlabel="Actual runtime / timeout reference (seconds)",
-           ylabel="Prediction relative to actual", ylim=(-3.6, 3.6))
-    ax.set_yticks([-3, -2, -1, 0, 1, 2, 3],
-                  ["1000× low", "100× low", "10× low", "Exact", "10× high", "100× high", "1000× high"])
+           ylabel="Prediction relative to actual", ylim=(-extent, extent))
+    ax.set_yticks(ticks, ["Exact" if t == 0 else f"{10**abs(t):g}× {'low' if t < 0 else 'high'}" for t in ticks])
     ax.set_title("B  Direction and size of the errors", loc="left", fontweight="bold")
 
     ax = axes[1, 0]
@@ -175,7 +177,8 @@ def plot_overview(rows, summary, output):
     for factor in (2, 10):
         ax.axvline(factor, color="#8995A3", linestyle="--", linewidth=.8)
     ax.set(xscale="log", xlabel="Error factor (larger = worse)",
-           ylabel="Runs with a larger error", ylim=(0, 102), xlim=(1, 2500))
+           ylabel="Runs with a larger error", ylim=(0, 102),
+           xlim=(1, max(2500, 1.25 * max(r["error_factor"] for r in rows))))
     ax.set_xticks([1, 2, 5, 10, 100, 1000])
     ax.xaxis.set_major_formatter(ScalarFormatter())
     ax.yaxis.set_major_formatter(PercentFormatter())
@@ -200,7 +203,7 @@ def plot_overview(rows, summary, output):
     ax.set_title("D  Which runs drive the error in seconds?", loc="left", fontweight="bold")
     ax.legend(loc="upper left", fontsize=9)
     fig.text(.08, .044, TIMEOUT_NOTE, fontsize=9, color="#536171")
-    fig.text(.08, .023, "These folds were also used to select the model. Results are validation estimates, not an independent final test.",
+    fig.text(.08, .023, summary.get("validation_note", "These folds were also used to select the model. Results are validation estimates, not an independent final test."),
              fontsize=9, color="#536171")
     save_figure(fig, output, "error-overview")
 
@@ -227,7 +230,9 @@ def plot_worst_cases(rows, output):
         ax.set_yticks(range(len(selected)),
                       [f"{r['filename'].removesuffix('.qasm')} · t={r['threshold']}"
                        + (" *" if r["status"] == "timeout" else "") for r in selected])
-        ax.set(xscale="log", xlim=(.2, 100000), ylim=(len(selected) - .4, -.6),
+        minimum = min(min(r["target_duration_s"], r["pred_duration_s"]) for r in selected)
+        maximum = max(max(r["target_duration_s"], r["pred_duration_s"]) for r in selected)
+        ax.set(xscale="log", xlim=(min(.2, minimum / 2), max(100000, maximum * 2)), ylim=(len(selected) - .4, -.6),
                xlabel="Runtime (seconds, logarithmic scale)")
         ax.set_title(title, loc="left", fontweight="bold", pad=15)
         ax.text(1.025, 1.025, "Error", transform=ax.transAxes, fontsize=10, fontweight="bold")
@@ -248,6 +253,9 @@ def main():
     model = json.loads(args.model.read_text())
     rows = join_predictions(load_csv(args.labels), load_csv(args.predictions))
     summary = metrics(rows)
+    if model["schema_version"] == 2:
+        summary["model_description"] = "Nested selection of regression / routing models"
+        summary["validation_note"] = "Model and routing choices used inner grouped folds. This circuit library was previously inspected during feature design."
     expected = model["training"]["candidates"][model["training"]["model"]]
     canonical_labels = args.labels.read_bytes().replace(b"\r\n", b"\n")
     hashes = {hashlib.sha256(canonical_labels).hexdigest(),
@@ -268,7 +276,7 @@ def main():
         "labels_sha256": hashlib.sha256(args.labels.read_bytes()).hexdigest(),
         "predictions_sha256": hashlib.sha256(args.predictions.read_bytes()).hexdigest(),
         "timeout_handling": TIMEOUT_NOTE,
-        "model_selection_caveat": "Validation folds were also used to select among three candidate models.",
+        "model_selection_caveat": model["training"].get("validation_caveat", "Validation folds were also used to select among three candidate models."),
     }
     args.output.mkdir(parents=True, exist_ok=True)
     for name, key in (("errors-by-factor.csv", "error_factor"), ("errors-by-seconds.csv", "absolute_error_s")):

@@ -4,12 +4,17 @@ Inference uses only the standard library. The fitted trees are stored in
 artifacts/runtime-model.json next to this module. Filenames, comments, and
 algorithm names are never model inputs.
 
-Bundled fit: 200 Extra Trees predicting log10(seconds), trained on 1,497 runs
-from 532 circuits. Five-fold validation grouped by circuit features scored
-89.78% with score.py's metric (constant baseline: 52.08%). This is a validation
-estimate on the supplied library, not a score on the organizers' hidden set.
+The artifact records its fitted model, feature schema, and validation results.
+Version 1 forests and version 2 routed/calibrated models are supported. All
+regressors predict log10(seconds); timeout routing returns the four-hour cap.
+The original model and feature cache are preserved in reports/model-improvement.
 
-Retrain from the repository root (uv installs the training dependencies):
+Run the nested improvement experiment from the repository root, using approved
+training dependencies (scikit-learn and xgboost-cpu):
+    uv run --with scikit-learn==1.9.1 --with xgboost-cpu==3.4.1 \
+        python quantathon-harness/train_improved.py
+
+The simpler original three-model training comparison is also available:
     uv run --with scikit-learn==1.9.1 python quantathon-harness/model.py \
         --train --circuits training_circuits --labels /path/to/runtime-data.csv
 
@@ -19,6 +24,7 @@ this module. --output selects another path; RuntimeModel(artifacts_dir) loads
 runtime-model.json from a custom directory.
 """
 
+import ast
 import json
 import math
 import re
@@ -73,18 +79,32 @@ FEATURE_NAMES = (
     "pair_reuse", "qubit_load_max", "qubit_load_cv", "gate_entropy", "n_gate_types",
     "parameter_fraction", "mean_parameter_chars", "sample_fraction",
 ) + tuple("gate_" + gate for gate in _GATES) + ("threshold", "log2_threshold",)
+BASE_FEATURE_NAMES = FEATURE_NAMES
+DETAIL_FEATURE_NAMES = (
+    "reset_fraction", "operations_after_measurement_fraction", "expanded_depth",
+    "expanded_two_qubit_ops", "expanded_three_qubit_ops", "expanded_rotation_ops",
+    "expanded_clifford_fraction", "expanded_nonclifford_fraction",
+    "expanded_edge_density", "expanded_max_degree", "expanded_mean_degree",
+    "expanded_max_cut", "expanded_mean_cut", "custom_profile_coverage",
+    "numeric_angle_fraction", "half_pi_angle_fraction", "quarter_pi_angle_fraction",
+    "small_angle_fraction", "mean_absolute_angle", "reset_per_active_qubit",
+    "entangling_segment_cv", "three_qubit_segment_cv", "reset_segment_cv",
+    "measurement_position_mean", "three_qubit_fraction", "expanded_ops_per_depth",
+    "reset_entangling_product", "active_qubit_log_ops",
+)
+FEATURE_NAMES = BASE_FEATURE_NAMES[:-2] + DETAIL_FEATURE_NAMES + BASE_FEATURE_NAMES[-2:]
 
 
-def _sample_program(program):
+def _sample_program(program, max_chars=_SAMPLE_CHARS):
     """Evenly spaced complete-statement windows, including both ends.
 
     This bounds Python-level parsing work on circuits with millions of gates.
     Estimated additive counts are scaled by the exact semicolon count. Depth
     is a structural estimate (conditionals are treated as potentially executed).
     """
-    if len(program) <= _SAMPLE_CHARS:
+    if len(program) <= max_chars:
         return [program], 1.0
-    width = _SAMPLE_CHARS // _SAMPLE_WINDOWS
+    width = max_chars // _SAMPLE_WINDOWS
     windows = []
     for i in range(_SAMPLE_WINDOWS):
         start = i * (len(program) - width) // (_SAMPLE_WINDOWS - 1)
@@ -120,6 +140,101 @@ def _gate_size(name, definitions, cache, visiting):
     return cache[name]
 
 
+def _numeric_angle(expression, cache):
+    """Evaluate bounded arithmetic only; never execute QASM or Python code."""
+    if expression in cache:
+        return cache[expression]
+    value = None
+    if len(expression) <= 96:
+        try:
+            tree = ast.parse(expression, mode="eval")
+            if len(list(ast.walk(tree))) > 32:
+                raise ValueError("Expression too large")
+
+            def visit(node):
+                if isinstance(node, ast.Expression):
+                    return visit(node.body)
+                if isinstance(node, ast.Constant) and type(node.value) in (int, float):
+                    return float(node.value)
+                if isinstance(node, ast.Name) and node.id == "pi":
+                    return math.pi
+                if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+                    return visit(node.operand) * (-1 if isinstance(node.op, ast.USub) else 1)
+                if isinstance(node, ast.BinOp):
+                    a, b = visit(node.left), visit(node.right)
+                    if isinstance(node.op, ast.Add): return a + b
+                    if isinstance(node.op, ast.Sub): return a - b
+                    if isinstance(node.op, ast.Mult): return a * b
+                    if isinstance(node.op, ast.Div): return a / b
+                    if isinstance(node.op, ast.Pow) and abs(b) <= 8 and abs(a) <= 1e6:
+                        return a ** b
+                raise ValueError("Unsupported expression")
+
+            result = visit(tree)
+            if isinstance(result, (float, int)) and math.isfinite(result) and abs(result) < 1e12:
+                value = float(result)
+        except (ValueError, SyntaxError, OverflowError, ZeroDivisionError, RecursionError):
+            pass
+    if len(cache) < 8192:
+        cache[expression] = value
+    return value
+
+
+def _gate_profile(name, definitions, formals, cache, visiting, budget):
+    """Summarize custom gate bodies once, with bounded recursion and work.
+
+    Depth composes summaries conservatively at each call. It is an estimate,
+    not a full dependency-preserving expansion. Symbolic angles are not bound.
+    """
+    if name in cache:
+        return cache[name]
+    if name not in definitions or name in visiting or len(visiting) >= 16 or budget[0] <= 0:
+        return None
+    visiting.add(name)
+    indexes = {q.strip(): i for i, q in enumerate(formals[name])}
+    counts, levels, edges = Counter(), {}, set()
+    windows, scale = _sample_program(definitions[name], 200_000)
+    complete = scale == 1
+    for window in windows:
+        for match in _STATEMENT.finditer(window):
+            budget[0] -= 1
+            if budget[0] < 0:
+                complete = False
+                break
+            op = _OPERATION.match(match[0][:-1].strip())
+            if not op or op[1] in _IGNORED:
+                continue
+            qubits = [indexes[q.strip()] for q in op[3].split(",") if q.strip() in indexes]
+            if not qubits:
+                continue
+            child = _gate_profile(op[1], definitions, formals, cache, visiting, budget)
+            if child is None:
+                counts[op[1].lower() if op[1].lower() in _KNOWN else "other"] += 1
+                counts[f"arity_{min(len(qubits), 3)}"] += 1
+                depth = 1
+                child_edges = [(0, j) for j in range(1, len(qubits))]
+                complete = complete and op[1] not in definitions
+            else:
+                counts.update(child["counts"])
+                depth = child["depth"]
+                child_edges = child["edges"]
+                complete = complete and child["complete"]
+            level = max(levels.get(q, 0) for q in qubits) + depth
+            for q in qubits:
+                levels[q] = level
+            for a, b in child_edges:
+                if max(a, b) < len(qubits):
+                    edges.add(tuple(sorted((qubits[a], qubits[b]))))
+        if budget[0] < 0:
+            break
+    visiting.remove(name)
+    profile = {"counts": Counter({k: v * scale for k, v in counts.items()}),
+               "depth": max(levels.values(), default=1) * scale,
+               "edges": edges, "complete": complete}
+    cache[name] = profile
+    return profile
+
+
 class RuntimeModel:
     def __init__(self, artifacts_dir=None, *, load_model=True):
         """Load weights relative to this module, or from an explicit directory.
@@ -140,16 +255,17 @@ class RuntimeModel:
                 "Run model.py --train --labels <runtime-data.csv> to train it, "
                 "or supply artifacts_dir for an existing model."
             ) from error
-        if (self.model.get("schema_version") != SCHEMA_VERSION
-                or self.model.get("features") != list(FEATURE_NAMES)):
+        if (self.model.get("schema_version") not in (1, 2)
+                or not self.model.get("features")
+                or not set(self.model["features"]).issubset(FEATURE_NAMES)):
             raise ValueError("Model artifact uses an incompatible feature schema")
 
     def featurize(self, qasm_text: str) -> dict:
         """Parse QASM 2/3 declarations, operations, and interaction structure.
 
-        Gate bodies are excluded from executed-operation counts. Their sizes
-        inform expanded_ops only when called; excess definitions are summarized
-        without retaining their bodies. Indexed and whole-register operands,
+        Gate bodies are excluded from outer-operation counts. Bounded recursive
+        summaries contribute separate primitive counts, depth estimates, and
+        interaction statistics when called. Indexed and whole-register operands,
         QASM 3 measurement assignments, resets, and if statements are supported.
         Large programs use deterministic sampling; no circuit is simulated.
         """
@@ -159,7 +275,7 @@ class RuntimeModel:
             qasm_text = _COMMENTS.sub(
                 lambda m: m[0] if m[0].startswith('"') else " ", qasm_text
             )
-        definitions = {}
+        definitions, formals = {}, {}
         definition_stats = [0, 0]
 
         def remove_definition(match):
@@ -167,6 +283,7 @@ class RuntimeModel:
             definition_stats[1] += match[3].count(";")
             if len(definitions) < _DEFINITION_LIMIT:
                 definitions[match[1]] = match[3]
+                formals[match[1]] = match[2].strip().split(",")
             return " "
 
         program = _DEFINITION.sub(remove_definition, qasm_text)
@@ -183,10 +300,16 @@ class RuntimeModel:
         pairs = Counter()
         counts, gates = Counter(), Counter()
         expansion_cache = {}
+        profiles, profile_budget, angle_cache = {}, [100_000], {}
+        expanded_counts, expanded_levels, expanded_pairs = Counter(), {}, set()
+        angle_counts = Counter()
+        segments = {key: [0] * 16 for key in ("entangling", "three_qubit", "reset")}
+        seen_measurement = False
+        after_measurement = profile_calls = complete_calls = measure_positions = 0
         windows, scale = _sample_program(program)
         span_sum = max_span = adjacent = entangling = 0
         parameter_chars = parameter_ops = 0
-        for window in windows:
+        for window_index, window in enumerate(windows):
             for match in _STATEMENT.finditer(window):
                 statement = match[0][:-1].strip()
                 if not statement:
@@ -225,6 +348,10 @@ class RuntimeModel:
                 normalized = name.lower()
                 known_name = normalized if normalized in _KNOWN else "other"
                 expanded = _gate_size(name, definitions, expansion_cache, set())
+                profile = _gate_profile(name, definitions, formals, profiles, set(), profile_budget)
+                position = (window_index + match.start() / max(len(window), 1)) / len(windows)
+                segment = min(15, int(position * 16))
+                angles = [] if params is None else [_numeric_angle(p.strip(), angle_cache) for p in params.split(",")]
                 for k in range(width):
                     qubits = tuple(dict.fromkeys(group[k % len(group)] for group in operand_groups))
                     arity = len(qubits)
@@ -234,6 +361,41 @@ class RuntimeModel:
                     counts["expanded_ops"] += expanded
                     gates[known_name] += 1
                     counts["n_custom"] += name in definitions or known_name == "other"
+                    if profile is not None:
+                        profile_calls += 1
+                        complete_calls += profile["complete"]
+                        expanded_counts.update(profile["counts"])
+                        detail_depth = profile["depth"]
+                        detail_edges = profile["edges"]
+                    else:
+                        expanded_counts[known_name] += 1
+                        if normalized not in ("measure", "reset"):
+                            expanded_counts[f"arity_{min(arity, 3)}"] += 1
+                        detail_depth = 1
+                        detail_edges = [(0, j) for j in range(1, arity)]
+                    detail_level = max(expanded_levels.get(q, 0) for q in qubits) + detail_depth
+                    for q in qubits:
+                        expanded_levels[q] = detail_level
+                    for a, b in detail_edges:
+                        if max(a, b) < arity:
+                            expanded_pairs.add(tuple(sorted((qubits[a], qubits[b]))))
+                    after_measurement += seen_measurement and normalized != "measure"
+                    if normalized == "measure":
+                        seen_measurement = True
+                        measure_positions += position
+                    segments["entangling"][segment] += arity >= 2
+                    segments["three_qubit"][segment] += arity >= 3
+                    segments["reset"][segment] += normalized == "reset"
+                    for angle in angles:
+                        angle_counts["total"] += 1
+                        if angle is not None:
+                            angle_counts["numeric"] += 1
+                            half = angle / (math.pi / 2)
+                            quarter = angle / (math.pi / 4)
+                            angle_counts["half_pi"] += abs(half - round(half)) < 1e-7
+                            angle_counts["quarter_pi"] += abs(quarter - round(quarter)) < 1e-7
+                            angle_counts["small"] += abs(angle) < 1e-3
+                            angle_counts["absolute"] += abs(angle)
                     if normalized in ("measure", "reset"):
                         counts["n_" + normalized] += 1
                     else:
@@ -318,6 +480,50 @@ class RuntimeModel:
         features["qubit_load_max"] = max(loads.values(), default=0) * scale
         variance = sum(c*c for c in loads.values()) / max(n_qubits, 1) - mean_load**2
         features["qubit_load_cv"] = math.sqrt(max(variance, 0)) / max(mean_load, 1)
+        primitive_total = max(sum(expanded_counts[g] for g in _GATES), 1)
+        primitive_clifford = sum(expanded_counts[g] for g in _CLIFFORD)
+        features.update({
+            "reset_fraction": counts["n_reset"] / total,
+            "three_qubit_fraction": counts["n_3q"] / total,
+            "operations_after_measurement_fraction": after_measurement / total,
+            "expanded_depth": max(expanded_levels.values(), default=0) * scale,
+            "expanded_two_qubit_ops": expanded_counts["arity_2"] * scale,
+            "expanded_three_qubit_ops": expanded_counts["arity_3"] * scale,
+            "expanded_rotation_ops": sum(expanded_counts[g] for g in _ROTATIONS) * scale,
+            "expanded_clifford_fraction": primitive_clifford / primitive_total,
+            "expanded_nonclifford_fraction": sum(expanded_counts[g] for g in ("t", "tdg", "ccx", "ccz", "cswap")) / primitive_total,
+            "custom_profile_coverage": complete_calls / max(profile_calls, 1),
+            "numeric_angle_fraction": angle_counts["numeric"] / max(angle_counts["total"], 1),
+            "half_pi_angle_fraction": angle_counts["half_pi"] / max(angle_counts["numeric"], 1),
+            "quarter_pi_angle_fraction": angle_counts["quarter_pi"] / max(angle_counts["numeric"], 1),
+            "small_angle_fraction": angle_counts["small"] / max(angle_counts["numeric"], 1),
+            "mean_absolute_angle": angle_counts["absolute"] / max(angle_counts["numeric"], 1),
+            "reset_per_active_qubit": counts["n_reset"] * scale / max(len(loads), 1),
+            "measurement_position_mean": measure_positions / max(counts["n_measure"], 1),
+            "expanded_ops_per_depth": primitive_total / max(max(expanded_levels.values(), default=0), 1),
+            "reset_entangling_product": counts["n_reset"] * entangling * scale**2,
+            "active_qubit_log_ops": len(loads) * math.log1p(counts["n_ops"] * scale),
+        })
+        detailed_degrees, cut_changes = Counter(), Counter()
+        for a, b in expanded_pairs:
+            detailed_degrees[a] += 1
+            detailed_degrees[b] += 1
+            cut_changes[a] += 1
+            cut_changes[b] -= 1
+        current = maximum = area = previous = 0
+        for point in sorted(cut_changes):
+            area += current * (point - previous)
+            current += cut_changes[point]
+            maximum = max(maximum, current)
+            previous = point
+        features.update({"expanded_edge_density": 2 * len(expanded_pairs) / max(n_qubits * (n_qubits - 1), 1),
+                         "expanded_max_degree": max(detailed_degrees.values(), default=0),
+                         "expanded_mean_degree": sum(detailed_degrees.values()) / max(n_qubits, 1),
+                         "expanded_max_cut": maximum,
+                         "expanded_mean_cut": area / max(n_qubits - 1, 1)})
+        for kind, values in segments.items():
+            mean = sum(values) / len(values)
+            features[kind + "_segment_cv"] = math.sqrt(sum((v - mean)**2 for v in values) / len(values)) / max(mean, 1)
         return {key: float(features.get(key, 0.0)) for key in FEATURE_NAMES[:-2]}
 
     def predict(self, features: dict, threshold: int) -> float:
@@ -325,24 +531,68 @@ class RuntimeModel:
         if self.model is None:
             raise RuntimeError("No fitted model; load a trained artifact before predicting")
         # sklearn's ordinary regression trees compare float32 input features.
-        vector = array("f", _feature_vector(features, threshold))
-        prediction = self.model["bias"]
-        for nodes in self.model["trees"]:
-            index = 0
-            while nodes[index][0] >= 0:
-                feature, split, left, right = nodes[index]
-                index = left if vector[feature] <= split else right
-            prediction += nodes[index][1]
+        vector = array("f", _feature_vector(features, threshold, self.model["features"]))
+        if "pipeline" in self.model:
+            prediction = _predict_component(self.model["pipeline"], vector)
+        else:
+            prediction = _predict_component(self.model, vector)
+        if prediction == math.log10(CAP_SECONDS):
+            return float(CAP_SECONDS)
         low, high = self.model["log_bounds"]
         return float(10 ** min(high, max(low, prediction)))
 
 
-def _feature_vector(features, threshold):
+def _calibration_features(prediction, log_threshold):
+    return [1.0, prediction, log_threshold / 9,
+            max(0.0, prediction), max(0.0, prediction - 1),
+            max(0.0, prediction - 2), max(0.0, prediction - 3)]
+
+
+def _predict_component(component, vector):
+    """Portable inference for forests, routing, and residual corrections."""
+    kind = component.get("kind", "forest")
+    if kind == "routed":
+        probabilities = _predict_component(component["classifier"], vector)
+        if probabilities[2] >= component["timeout_confidence"]:
+            return math.log10(CAP_SECONDS)
+        if probabilities[0] >= component["fast_confidence"]:
+            return _predict_component(component["fast"], vector)
+        if probabilities[1] >= component["regular_confidence"]:
+            return _predict_component(component["regular"], vector)
+        return _predict_component(component["base"], vector)
+    if kind == "calibrated":
+        prediction = _predict_component(component["base"], vector)
+        inputs = _calibration_features(prediction, vector[component["threshold_index"]])
+        correction = sum(a * b for a, b in zip(inputs, component["coefficients"]))
+        return prediction + max(-component["clip"], min(component["clip"], correction))
+    indexes = component.get("feature_indices")
+    if indexes is not None:
+        vector = [vector[i] for i in indexes]
+    prediction = component["bias"]
+    if isinstance(prediction, list):
+        prediction = prediction.copy()
+    less_than = component.get("comparison") == "lt"
+    for nodes in component["trees"]:
+        index = 0
+        while nodes[index][0] >= 0:
+            feature, split, left, right = nodes[index]
+            goes_left = vector[feature] < split if less_than else vector[feature] <= split
+            index = left if goes_left else right
+        value = nodes[index][1]
+        if isinstance(prediction, list):
+            for i, p in enumerate(value):
+                prediction[i] += p
+        else:
+            prediction += value
+    return prediction
+
+
+def _feature_vector(features, threshold, names=FEATURE_NAMES):
     threshold = float(threshold)
     if not math.isfinite(threshold) or threshold <= 0:
         raise ValueError("threshold must be finite and positive")
-    values = [float(features.get(key, 0.0)) for key in FEATURE_NAMES[:-2]]
-    values.extend((threshold, math.log2(threshold)))
+    inputs = dict(features, threshold=threshold, log2_threshold=math.log2(threshold))
+    values = [float(inputs.get(key, 0.0)) for key in names]
     if not all(math.isfinite(value) and abs(value) < 1e30 for value in values):
         raise ValueError("features must be finite numbers smaller than 1e30")
     return values
