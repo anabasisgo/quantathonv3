@@ -16,8 +16,8 @@
 % \IfFileExists{final-presentation-figures/numbers.tex}{\input{final-presentation-figures/numbers.tex}}{\input{reports/final-presentation-figures/numbers.tex}}
 \newcommand{\source}[1]{\par\vspace{1mm}{\tiny\color{gray}#1}}
 \newcommand{\takeaway}[1]{\par\smallskip{\color{ModelTeal}\bfseries #1}\par\smallskip}
-\providecommand{\MeanEstimate}{\ldots}
-\providecommand{\MaxEstimate}{\ldots}
+\providecommand{\MeanEstimate}{0.739}
+\providecommand{\MaxEstimate}{4.886}
 \providecommand{\MeanPredict}{\ldots}
 \tikzset{box/.style={draw=ModelNavy,rounded corners,fill=ModelNavy!5,align=center,minimum height=0.8cm,font=\small},arr/.style={-{Stealth},thick,ModelNavy}}
 \title{Quantum Circuit Runtime Inference}
@@ -215,7 +215,7 @@ Good estimation can lead to fewer failed jobs, better completion-time estimates,
 \centering
 % \includegraphics[width=.92\textwidth,height=4.4cm,keepaspectratio]{estimation-speed.pdf}
 \includegraphics[width=.87\textwidth,height=4.45cm,keepaspectratio]{assets/simulation_model_circuit_processing_time.png}
-\takeaway{Mean extraction + one prediction: \MeanEstimate\ s\quad |\quad Maximum: \MaxEstimate\ s}
+\takeaway{Mean extraction + probe analysis: \MeanEstimate\ s\quad |\quad Maximum extraction + probe analysis: \MaxEstimate\ s}
 \begin{itemize}
 \item Prediction takes a median 13 ms per call; features are reused across settings.
 \item Measured across 532 circuits and 1,596 predictions on this local machine.
