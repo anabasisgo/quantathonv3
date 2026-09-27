@@ -5,9 +5,17 @@ artifacts/runtime-model.json next to this module. Filenames, comments, and
 algorithm names are never model inputs.
 
 The artifact records its fitted model, feature schema, and validation results.
-Version 1 forests and version 2 routed/calibrated models are supported. All
+Version 1 forests, version 2 routed/calibrated models, and version 3 models
+with bounded mock simulation features are supported. All
 regressors predict log10(seconds); timeout routing returns the four-hour cap.
-The original model and feature cache are preserved in reports/model-improvement.
+The current model has 145 inputs, including approximate entanglement and
+threshold-dependent bond costs. It uses only a bounded circuit prefix.
+The preceding model is preserved in reports/mock-simulation/pre-integration.
+
+Retrain the current production recipe with the evaluated mock features:
+    uv run --offline --cache-dir /tmp/quantathon-uv-cache \
+        --with scikit-learn==1.9.1 --with xgboost-cpu==3.4.1 \
+        python quantathon-harness/train_mock.py
 
 Run the nested improvement experiment from the repository root, using approved
 training dependencies (scikit-learn and xgboost-cpu):
@@ -28,6 +36,7 @@ import ast
 import json
 import math
 import re
+import time
 from array import array
 from collections import Counter
 from pathlib import Path
@@ -235,14 +244,374 @@ def _gate_profile(name, definitions, formals, cache, visiting, budget):
     return profile
 
 
+# Bounded Clifford surrogate evaluated in reports/mock-simulation.
+# The surrogate entropy and threshold/bond relation are approximations.
+_MOCK_QUBITS_LIMIT = 512
+_MOCK_GATES_LIMIT = 20_000
+_MOCK_SOURCE_CHARS_LIMIT = 8_000_000
+_MOCK_VISITS_LIMIT = 100_000
+_MOCK_DEFINITIONS_LIMIT = 2048
+_MOCK_DEFINITION = re.compile(
+    r"\bgate\s+([A-Za-z_]\w*)\s*(?:\(([^{}]*?)\))?\s*([^{}]*?)\{([^{}]*)\}")
+_MOCK_TOKEN = re.compile(r"\b[A-Za-z_]\w*\b")
+
+_MOCK_CONTROL_NAMES = ["mock_coverage", "mock_approximated_fraction", "mock_unknown_fraction",
+                 "mock_conditional_fraction", "mock_prefix_two_qubit_fraction",
+                 "mock_prefix_mean_span", "mock_log2_processed", "mock_incomplete"]
+_MOCK_ENTROPY_NAMES = ["mock_entropy_peak", "mock_entropy_time_mean", "mock_entropy_final_mean",
+                 "mock_entropy_final_max", "mock_entropy_peak_mean", "mock_middle_peak",
+                 "mock_entangled_qubit_mean", "mock_entropy_drop_fraction"]
+_MOCK_COST_NAMES = ["mock_log2_work", "mock_log2_memory", "mock_capped_entropy_mean",
+              "mock_bond_cap_fraction", "mock_entropy_excess", "mock_log2_peak_bond"]
+
+
+# Keep the historical 123-column schema for the archived structural trainers.
+_MOCK_ALL_NAMES = tuple(_MOCK_CONTROL_NAMES + _MOCK_ENTROPY_NAMES + _MOCK_COST_NAMES)
+MOCK_FEATURE_NAMES = FEATURE_NAMES + _MOCK_ALL_NAMES
+
+
+class _MockBudgetExpired(Exception):
+    pass
+
+
+class _MockTableau:
+    """A pure stabilizer state, with irrelevant Pauli signs omitted."""
+
+    def __init__(self, n):
+        self.n = n
+        self.x = [0] * n
+        self.z = [1 << q for q in range(n)]
+
+    def h(self, q):
+        self.x[q], self.z[q] = self.z[q], self.x[q]
+
+    def s(self, q):
+        self.z[q] ^= self.x[q]
+
+    def cx(self, a, b):
+        self.x[b] ^= self.x[a]
+        self.z[a] ^= self.z[b]
+
+    def cz(self, a, b):
+        self.z[b] ^= self.x[a]
+        self.z[a] ^= self.x[b]
+
+    def measure(self, q):
+        anti = self.x[q]
+        if not anti:
+            return
+        pivot = anti & -anti
+        rest = anti ^ pivot
+        for columns in (self.x, self.z):
+            for j, column in enumerate(columns):
+                if column & pivot:
+                    column ^= rest
+                columns[j] = column & ~pivot
+        self.z[q] |= pivot
+
+    def entropies(self):
+        # rank of restricted generator matrix minus subsystem size. Incremental
+        # elimination obtains every cut in one pass through the columns.
+        basis, values = {}, []
+        for q in range(self.n):
+            for column in (self.x[q], self.z[q]):
+                while column:
+                    bit = column.bit_length()
+                    if bit in basis:
+                        column ^= basis[bit]
+                    else:
+                        basis[bit] = column
+                        break
+            if q < self.n - 1:
+                values.append(len(basis) - q - 1)
+        return values
+
+    def mixed_fraction(self):
+        return sum(bool(x and z and x != z) for x, z in zip(self.x, self.z)) / max(self.n, 1)
+
+
+def _mock_parse_prefix(source, deadline):
+    """Expand a bounded prefix, including nested gate parameters/register calls."""
+    flags = Counter()
+    if len(source) > _MOCK_SOURCE_CHARS_LIMIT:
+        source = source[:_MOCK_SOURCE_CHARS_LIMIT]
+        source = source[:source.rfind(";") + 1]
+        flags["source_limited"] = 1
+    source = _COMMENTS.sub(lambda m: m[0] if m[0].startswith('"') else " ", source)
+    definitions = {}
+
+    def definition(m):
+        if len(definitions) < _MOCK_DEFINITIONS_LIMIT:
+            definitions[m[1]] = ([p.strip() for p in (m[2] or "").split(",") if p.strip()],
+                                 [q.strip() for q in m[3].split(",")], m[4])
+        else:
+            flags["definition_limited"] += 1
+        return " "
+
+    program = _MOCK_DEFINITION.sub(definition, source)
+    registers, n = {}, 0
+    for m in _DECLARATION.finditer(program):
+        name, size = m[1] or m[4], int(m[2] or m[3] or 1)
+        if name not in registers:
+            registers[name] = (n, size)
+            n += size
+    if n > _MOCK_QUBITS_LIMIT:
+        return n, [], {**flags, "qubit_limited": 1}
+    angle_cache, body_cache, operations = {}, {}, []
+    visits = 0
+
+    def statements(body):
+        for m in _STATEMENT.finditer(body):
+            statement = m[0][:-1].strip()
+            conditional = bool(_CONDITION.match(statement))
+            statement = _CONDITION.sub("", statement)
+            if "measure " in statement:
+                statement = statement[statement.index("measure "):]
+            op = _OPERATION.match(statement)
+            if op and op[1] not in _IGNORED:
+                yield op[1], op[2], op[3].split("->", 1)[0], conditional
+            elif statement:
+                head = _MOCK_TOKEN.match(statement)
+                if head is None or head[0] not in _IGNORED:
+                    flags["unparsed"] += 1
+
+    def angle(expr, bindings):
+        expr = _MOCK_TOKEN.sub(lambda m: "(" + str(bindings[m[0]]) + ")"
+                         if m[0] in bindings and bindings[m[0]] is not None else m[0], expr)
+        return _numeric_angle(expr, angle_cache)
+
+    def expand(name, params, qubits, bindings, stack, conditional):
+        nonlocal visits
+        visits += 1
+        if visits % 128 == 0 and time.perf_counter() >= deadline:
+            raise _MockBudgetExpired
+        if visits > _MOCK_VISITS_LIMIT or len(operations) >= _MOCK_GATES_LIMIT:
+            flags["gate_limited"] = 1
+            raise _MockBudgetExpired
+        values = tuple(angle(p.strip(), bindings) for p in params.split(",")) if params else ()
+        if name in definitions and name not in stack and len(stack) < 16:
+            formal_p, formal_q, body = definitions[name]
+            local_p, local_q = dict(zip(formal_p, values)), dict(zip(formal_q, qubits))
+            if name not in body_cache:
+                body_cache[name] = list(statements(body))[:_MOCK_VISITS_LIMIT]
+            for child, child_p, operands, child_cond in body_cache[name]:
+                refs = [s.strip() for s in operands.split(",")]
+                if all(q in local_q for q in refs):
+                    expand(child, child_p, tuple(local_q[q] for q in refs), local_p,
+                           stack + (name,), conditional or child_cond)
+                else:
+                    flags["unparsed"] += 1
+        else:
+            operations.append((name.lower(), values, qubits))
+            flags["conditional"] += conditional
+            flags["recursive_unexpanded"] += name in definitions
+
+    try:
+        for name, params, operands, conditional in statements(program):
+            refs = []
+            for operand in operands.split(","):
+                m = _OPERAND.fullmatch(operand.strip())
+                if not m or m[1] not in registers:
+                    break
+                offset, size = registers[m[1]]
+                if m[2] is not None:
+                    index = int(m[2])
+                    if index >= size:
+                        break
+                    refs.append([offset + index])
+                else:
+                    refs.append(list(range(offset, offset + size)))
+            else:
+                width = max(map(len, refs), default=0)
+                if width and all(len(ref) in (1, width) for ref in refs):
+                    for j in range(width):
+                        qs = tuple(ref[j % len(ref)] for ref in refs)
+                        if len(set(qs)) == len(qs):
+                            expand(name, params, qs, {}, (), conditional)
+                    continue
+            flags["unparsed"] += 1
+    except _MockBudgetExpired:
+        if not flags["gate_limited"]:
+            flags["deadline"] = 1
+    return n, operations, dict(flags)
+
+
+def _mock_apply_gate(state, name, angles, qs):
+    """Return (approximated, unknown); Clifford transformations ignore signs."""
+    unknown_angle = any(v is None for v in angles)
+    angles = tuple(math.pi / 2 if v is None else v for v in angles)
+    approximate = unknown_angle
+
+    def rotate(axis, angle, q):
+        nonlocal approximate
+        units = angle / (math.pi / 2)
+        # Halfway cases round away from zero. S and S-dagger have identical
+        # sign-free tableaux; Pauli rotations only change omitted signs.
+        turns = int(math.copysign(math.floor(abs(units) + .5), units))
+        approximate |= abs(units - turns) > 1e-8
+        if turns % 2:
+            if axis == "x":
+                state.h(q); state.s(q); state.h(q)
+            elif axis == "y":
+                state.h(q)
+            else:
+                state.s(q)
+
+    q = qs[0]
+    if name in ("id", "x", "y", "z"):
+        pass
+    elif name == "h":
+        state.h(q)
+    elif name in ("s", "sdg"):
+        state.s(q)
+    elif name in ("t", "tdg"):
+        state.s(q)
+        approximate = True
+    elif name in ("sx", "sxdg"):
+        rotate("x", math.pi / 2, q)
+    elif name in ("rx", "ry", "rz", "p", "u1"):
+        rotate(name[-1] if name.startswith("r") else "z", angles[0] if angles else math.pi / 2, q)
+    elif name in ("u", "u2", "u3"):
+        theta, phi, lam = ((math.pi / 2,) + angles if name == "u2" else angles) if angles else (math.pi / 2,) * 3
+        rotate("z", lam, q); rotate("y", theta, q); rotate("z", phi, q)
+    elif name in ("measure", "reset"):
+        state.measure(q)
+    elif len(qs) == 2:
+        a, b = qs
+        if name == "cx":
+            state.cx(a, b)
+        elif name == "cz":
+            state.cz(a, b)
+        elif name == "cy":
+            state.s(b); state.cx(a, b); state.s(b)
+        elif name in ("swap", "iswap"):
+            if name == "iswap":
+                state.s(a); state.s(b); state.cz(a, b)
+            state.x[a], state.x[b] = state.x[b], state.x[a]
+            state.z[a], state.z[b] = state.z[b], state.z[a]
+        elif name == "dcx":
+            state.cx(a, b); state.cx(b, a)
+        elif name in ("cp", "cu1", "crz", "crx", "cry"):
+            # Nearest controlled Pauli, deliberately a coarse approximation.
+            value = angles[0] if angles else math.pi
+            turns = int(math.floor(abs(value / math.pi) + .5))
+            if turns % 2:
+                if name == "crx": state.cx(a, b)
+                elif name == "cry": state.s(b); state.cx(a, b); state.s(b)
+                else: state.cz(a, b)
+            approximate = True
+        elif name in ("rxx", "ryy", "rzz", "rzx"):
+            axes = name[1:]
+            for axis, target in zip(axes, qs):
+                if axis == "x": state.h(target)
+                elif axis == "y": state.s(target); state.h(target)
+            state.cx(a, b)
+            rotate("z", angles[0] if angles else math.pi / 2, b)
+            state.cx(a, b)
+            for axis, target in reversed(list(zip(axes, qs))):
+                if axis == "x": state.h(target)
+                elif axis == "y": state.h(target); state.s(target)
+        else:
+            state.cx(a, b)
+            return True, True
+    else:
+        # Includes Toffoli/Fredkin and unknown custom gates that could not be
+        # expanded. This is a topology-preserving star, not their unitary.
+        for control in qs[:-1]:
+            state.cx(control, qs[-1])
+        if len(qs) == 1:
+            state.h(q)
+        return True, True
+    return bool(approximate), bool(unknown_angle)
+
+
+def _mock_simulate(source, expected_ops, budget_seconds=10.0):
+    start = time.perf_counter()
+    deadline = start + budget_seconds
+    n, operations, flags = _mock_parse_prefix(source, deadline)
+    state = _MockTableau(n if n <= _MOCK_QUBITS_LIMIT else 0)
+    trace = [{"step": 0, "entropy": [0] * max(state.n - 1, 0), "mixed_fraction": 0.0}]
+    stride = max(1, math.ceil(len(operations) / 32))
+    approximated = unknown = two = span = processed = extra_snapshots = 0
+
+    def snapshot(step):
+        if trace[-1]["step"] != step:
+            trace.append({"step": step, "entropy": state.entropies(),
+                          "mixed_fraction": state.mixed_fraction()})
+
+    previous = ""
+    for i, (name, angles, qs) in enumerate(operations, 1):
+        if i % 128 == 1 and time.perf_counter() >= deadline:
+            flags["deadline"] = 1
+            break
+        if name in ("measure", "reset") and previous not in ("measure", "reset") and extra_snapshots < 32:
+            snapshot(i - 1)
+            extra_snapshots += 1
+        a, u = _mock_apply_gate(state, name, angles, qs)
+        approximated += a
+        unknown += u
+        two += len(qs) >= 2
+        span += max(qs) - min(qs)
+        processed = i
+        previous = name
+        if i % stride == 0:
+            snapshot(i)
+    snapshot(processed)
+    coverage = min(1.0, processed / max(expected_ops, 1))
+    incomplete = bool(flags.get("source_limited") or flags.get("gate_limited") or
+                      flags.get("deadline") or flags.get("qubit_limited") or
+                      flags.get("unparsed") or flags.get("recursive_unexpanded") or
+                      flags.get("definition_limited"))
+    controls = dict(zip(_MOCK_CONTROL_NAMES, [coverage, approximated / max(processed, 1),
+        unknown / max(processed, 1), flags.get("conditional", 0) / max(len(operations), 1),
+        two / max(processed, 1), span / max(two, 1), math.log2(1 + processed), float(incomplete)]))
+    hist = Counter()
+    mixed = 0.0
+    for before, after in zip(trace, trace[1:]):
+        weight = after["step"] - before["step"]
+        for value in after["entropy"]:
+            hist[value] += weight
+        mixed += after["mixed_fraction"] * weight
+    total_weight = max(sum(hist.values()), 1)
+    final = trace[-1]["entropy"] or [0]
+    means = [sum(t["entropy"]) / max(len(t["entropy"]), 1) for t in trace]
+    peaks = [max(t["entropy"], default=0) for t in trace]
+    middle = [t["entropy"][len(t["entropy"]) // 2] if t["entropy"] else 0 for t in trace]
+    peak_snapshot = trace[max(range(len(trace)), key=lambda j: means[j])]["entropy"]
+    entropies = dict(zip(_MOCK_ENTROPY_NAMES, [max(peaks), sum(s*w for s,w in hist.items()) / total_weight,
+        sum(final) / len(final), max(final), max(means), max(middle), mixed / max(processed, 1),
+        sum(b < a for a,b in zip(means, means[1:])) / max(len(means) - 1, 1)]))
+    return {"controls": controls, "entropy_features": entropies, "histogram": dict(hist),
+            "peak_snapshot": peak_snapshot, "processed": processed, "expected_ops": expected_ops,
+            "n_qubits": n, "flags": flags, "snapshots": len(trace),
+            "trace": trace, "seconds": time.perf_counter() - start}
+
+
+def _mock_threshold_features(result, threshold):
+    """Hypothetical MPS costs with chi=min(2**S, threshold); not SDK internals."""
+    cap = math.log2(threshold)
+    hist = {int(k): v for k, v in result["histogram"].items()}
+    weight = max(sum(hist.values()), 1)
+    mean = sum(min(s, cap) * w for s, w in hist.items()) / weight
+    cubic = sum(2 ** (3 * min(s, cap)) * w for s, w in hist.items()) / weight
+    work = max(result["expected_ops"], 1) * max(cubic, 1)
+    memory = sum(2 ** (2 * min(s, cap)) for s in result["peak_snapshot"])
+    return dict(zip(_MOCK_COST_NAMES, [math.log2(work), math.log2(max(memory, 1)), mean,
+        sum(w for s, w in hist.items() if s >= cap) / weight,
+        sum(max(0, s - cap) * w for s, w in hist.items()) / weight,
+        min(result["entropy_features"]["mock_entropy_peak"], cap)]))
+
+
 class RuntimeModel:
-    def __init__(self, artifacts_dir=None, *, load_model=True):
+    def __init__(self, artifacts_dir=None, *, load_model=True, use_mock=None):
         """Load weights relative to this module, or from an explicit directory.
 
         load_model=False permits offline feature extraction and training before
-        an artifact exists. Prediction requires a fitted model.
+        an artifact exists. Pass use_mock=True to extract the new features
+        without a fitted model. Loaded artifacts select their own schema.
         """
         self.model = None
+        self._use_mock = bool(use_mock)
         if not load_model:
             return
         artifact = (Path(artifacts_dir) / "runtime-model.json"
@@ -255,12 +624,36 @@ class RuntimeModel:
                 "Run model.py --train --labels <runtime-data.csv> to train it, "
                 "or supply artifacts_dir for an existing model."
             ) from error
-        if (self.model.get("schema_version") not in (1, 2)
+        if (self.model.get("schema_version") not in (1, 2, 3)
                 or not self.model.get("features")
-                or not set(self.model["features"]).issubset(FEATURE_NAMES)):
+                or not set(self.model["features"]).issubset(MOCK_FEATURE_NAMES)):
             raise ValueError("Model artifact uses an incompatible feature schema")
+        requires_mock = bool(set(self.model["features"]) & set(_MOCK_ALL_NAMES))
+        if requires_mock and use_mock is False:
+            raise ValueError("This artifact requires mock simulation features")
+        self._use_mock = requires_mock or bool(use_mock)
 
     def featurize(self, qasm_text: str) -> dict:
+        """Extract structure and, for mock artifacts, a bounded circuit surrogate.
+
+        Simulation runs once per circuit. Only its compact entropy summary is
+        retained; threshold-specific costs are calculated cheaply in predict.
+        Old artifacts and load_model=False retain the structural feature API.
+        """
+        start = time.perf_counter()
+        features = self._structural_features(qasm_text)
+        if self._use_mock:
+            budget = min(10.0, max(0.0, 14.0 - (time.perf_counter() - start)))
+            mock = _mock_simulate(qasm_text, features["expanded_ops"], budget_seconds=budget)
+            features.update(mock["controls"])
+            features.update(mock["entropy_features"])
+            # Exclude traces and wall times so features remain small,
+            # JSON-serializable and deterministic whenever the budget completes.
+            features["_mock"] = {key: mock[key] for key in (
+                "histogram", "peak_snapshot", "expected_ops", "entropy_features")}
+        return features
+
+    def _structural_features(self, qasm_text: str) -> dict:
         """Parse QASM 2/3 declarations, operations, and interaction structure.
 
         Gate bodies are excluded from outer-operation counts. Bounded recursive
@@ -592,6 +985,12 @@ def _feature_vector(features, threshold, names=FEATURE_NAMES):
     if not math.isfinite(threshold) or threshold <= 0:
         raise ValueError("threshold must be finite and positive")
     inputs = dict(features, threshold=threshold, log2_threshold=math.log2(threshold))
+    if any(key in _MOCK_ALL_NAMES for key in names):
+        if "_mock" not in features:
+            raise ValueError("Mock features are missing; featurize with this model first")
+        inputs.update(_mock_threshold_features(features["_mock"], threshold))
+        if any(key not in inputs for key in names if key in _MOCK_ALL_NAMES):
+            raise ValueError("Incomplete mock simulation features")
     values = [float(inputs.get(key, 0.0)) for key in names]
     if not all(math.isfinite(value) and abs(value) < 1e30 for value in values):
         raise ValueError("features must be finite numbers smaller than 1e30")

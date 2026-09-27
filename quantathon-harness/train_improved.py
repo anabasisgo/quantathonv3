@@ -37,8 +37,11 @@ TRAINING_FAMILIES = REGRESSORS + ["routed_0.5", "routed_1", "routed_2", "calibra
 def feature_fingerprint():
     functions = [runtime_module._sample_program, runtime_module._gate_size,
                  runtime_module._numeric_angle, runtime_module._gate_profile,
-                 RuntimeModel.featurize]
-    text = "\n".join(inspect.getsource(f) for f in functions)
+                 RuntimeModel._structural_features]
+    # The 123-input structural parser is unchanged; normalize its method rename
+    # so historical feature caches stay valid independently of the new wrapper.
+    text = "\n".join(inspect.getsource(f).replace(
+        "def _structural_features(", "def featurize(", 1) for f in functions)
     text += repr(FEATURE_NAMES)
     text += repr((runtime_module._SAMPLE_CHARS, runtime_module._SAMPLE_WINDOWS,
                   runtime_module._DEFINITION_LIMIT))

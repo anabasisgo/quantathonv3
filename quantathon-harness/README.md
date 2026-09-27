@@ -22,8 +22,32 @@ pip install -r requirements.txt
 There is no timeout flag — if you think a run will time out, just predict a duration
 **≥ the 4-hour cap (14400 s)**.
 
-A trivial baseline is already in `model.py` so the harness runs before you touch
-anything. Replace its body with your real parser and model.
+`model.py` and `artifacts/runtime-model.json` contain the fitted runtime model.
+It combines 123 structural/threshold inputs with 22 mock-simulation inputs.
+The bounded Clifford surrogate tracks approximate entanglement through a
+circuit prefix; `predict` derives bond-cost features for the requested threshold.
+Inference requires only the Python standard library. QASM decompression may use
+the optional `zstandard` package as before.
+
+The simulator processes at most 20,000 expanded gates, 8 million source
+characters and 512 qubits. Truncated inputs carry coverage/incomplete features.
+Its 10-second cooperative deadline also respects the time left after structural
+parsing, reserving one second of the 15-second budget. Measured integration
+timings and limitations are in
+[the implementation report](../reports/mock-simulation/implementation/README.md).
+
+To refit the evaluated recipe on the existing training library:
+
+```bash
+uv run --offline --cache-dir /tmp/quantathon-uv-cache \
+  --with scikit-learn==1.9.1 --with xgboost-cpu==3.4.1 \
+  python quantathon-harness/train_mock.py
+```
+
+Run this command from the repository root. It checks live features against the
+recorded experiment and portable predictions against scikit-learn before
+replacing the artifact. The previous source and artifact are saved in
+`reports/mock-simulation/pre-integration/`. Older artifacts remain loadable.
 
 **Caps:** `featurize` and `predict` must each run in **≤ 15 s per circuit**. The
 harness times you and warns on anything over.
@@ -78,7 +102,7 @@ process, etc. — judged live, five equally-weighted categories). The automated 
 is **pure duration accuracy**, per `(circuit, threshold)`:
 
 ```
-score = max(0, 1 − |log10(pred / actual)| / 2)      # exact = 1.0, off by 10× = 0
+score = max(0, 1 − |log10(pred / actual)| / 2)      # exact = 1.0, off by 10× = 0.5
 ```
 
 Runtimes span seconds to hours, so accuracy is measured in **log scale** — being
