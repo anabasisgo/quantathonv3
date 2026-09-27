@@ -141,24 +141,6 @@ Good estimation can lead to fewer failed jobs, better completion-time estimates,
 \takeaway{Challenge score: 76.42\%}
 \end{frame}
 
-\begin{frame}{Tested Workflows: Graph Transformer}
-\centering
-\begin{tikzpicture}[x=.9cm,y=1cm]
-\node[box,text width=2.4cm] (input) at (0,0) {Circuit\\+ backend};
-\node[box,text width=2.4cm] (repr) at (3.5,0) {Circuit graph\\Gate nodes + links};
-\node[box,text width=2.4cm] (features) at (7.0,0) {Encode nodes\\+ global features};
-\node[box,text width=2.6cm] (gt) at (10.5,0) {Graph Transformer\\3 attention layers};
-\draw[arr] (input)--(repr); \draw[arr] (repr)--(features); \draw[arr] (features)--(gt);
-\end{tikzpicture}
-\vspace{.25cm}
-\begin{itemize}
-\item Workflow based on Ma \& Li, \emph{Understanding and Estimating the Execution Time of Quantum Circuits} (arXiv:2411.15631v2).
-\item Graph features capture gate connectivity and global features summarize circuit size and gate counts.
-\item Combines pooled graph features with global features in a neural regressor.
-\end{itemize}
-\takeaway{Challenge score: 92.07\%}
-\end{frame}
-
 \begin{frame}{Tested Workflows: $k$-Nearest Neighbors}
 \centering
 \begin{tikzpicture}[x=.9cm,y=1cm]
@@ -198,10 +180,45 @@ Good estimation can lead to fewer failed jobs, better completion-time estimates,
 \takeaway{Challenge score: 91.95\%}
 \end{frame}
 
+\begin{frame}{Tested Workflows: Graph Transformer}
+\centering
+\begin{tikzpicture}[x=.9cm,y=1cm]
+\node[box,text width=2.4cm] (input) at (0,0) {Circuit\\+ backend};
+\node[box,text width=2.4cm] (repr) at (3.5,0) {Circuit graph\\Gate nodes + links};
+\node[box,text width=2.4cm] (features) at (7.0,0) {Encode nodes\\+ global features};
+\node[box,text width=2.6cm] (gt) at (10.5,0) {Graph Transformer\\3 attention layers};
+\draw[arr] (input)--(repr); \draw[arr] (repr)--(features); \draw[arr] (features)--(gt);
+\end{tikzpicture}
+\vspace{.25cm}
+\begin{itemize}
+\item Workflow based on Ma \& Li, \emph{Understanding and Estimating the Execution Time of Quantum Circuits} (arXiv:2411.15631v2).
+\item Graph features capture gate connectivity and global features summarize circuit size and gate counts.
+\item Combines pooled graph features with global features in a neural regressor.
+\end{itemize}
+\takeaway{Challenge score: 92.07\%}
+\end{frame}
+
 \begin{frame}{Tested Workflows: Mock Simulator + Neural Network}
 \centering
 \includegraphics[width=\textwidth,height=5.5cm,keepaspectratio]{assets/nn_pipeline.pdf}
 \takeaway{Challenge score: 94.81\%}
+\end{frame}
+
+\begin{frame}{Decided Features}
+\small
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}p{2.8cm}c p{5.3cm} p{4.4cm}@{}}\toprule
+\textbf{Family} & \textbf{\#} & \textbf{Question it answers} & \textbf{Examples}\\\midrule
+Structure & 26 & How big is the circuit and how is it wired? & gate counts, depth, interaction graph, cut counts, SupermarQ metrics\\
+Entanglement bound & 10 & How much entanglement \emph{could} build up at each cut? & per-cut bond bound, cost estimate at $t$ = 16/64/512\\
+Entanglement probe & 8 & How much entanglement \emph{does} build up, and how fast? & bond saturation, entropy, discarded weight, coverage\\\bottomrule
+\end{tabular}
+\vspace{2mm}
+\begin{itemize}
+\item Structure features follow the literature (Ma \& Li 2024; SupermarQ; RCM cuts from Xing et al.)
+\item Bound and probe features follow from our threshold hypothesis
+\item Plus 4 threshold inputs (one-hot + ordinal) $\Rightarrow$ 48 network inputs
+\end{itemize}
 \end{frame}
 
 \begin{frame}
