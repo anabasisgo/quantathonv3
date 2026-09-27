@@ -106,19 +106,22 @@ Good estimation can lead to fewer failed jobs, better completion-time estimates,
 \begin{block}{Runtime estimate}
 \centering
 \large
+\[
 \begin{aligned}
 \log_{10}(\hat{t}) ={}& \beta_0 + \beta_q q + \beta_1\log_{10}(1+g_1)
   + \beta_m\log_{10}(1+g_m)\\[2mm]
   &+ \beta_d\log_{10}(1+d) + \beta_T\log_{10}(T/16)
 \end{aligned}
+\]
 \end{block}
 \vspace{.3cm}
 \begin{tikzpicture}[node distance=.45cm]
-\node[box,text width=3.1cm] (features) {Circuit and setting\features};
+\node[box,text width=3.1cm] (features) {Circuit and setting\\features};
 \node[box,fill=ModelTeal!10,text width=3.1cm,right=of features] (prediction) {Predicted $\log_{10}(t)$};
-\node[box,text width=2.7cm,right=of prediction] (runtime) {Exponentiate to\estimate runtime $\hat{t}$};
+\node[box,text width=2.7cm,right=of prediction] (runtime) {Exponentiate to\\estimate runtime $\hat{t}$};
 \draw[arr] (features)--(prediction); \draw[arr] (prediction)--(runtime);
 \end{tikzpicture}
+\takeaway{Challenge score: 68.53\%}
 \end{frame}
 
 \begin{frame}{Tested Workflows: Gaussian Mixture Model}
@@ -126,15 +129,16 @@ Good estimation can lead to fewer failed jobs, better completion-time estimates,
 \begin{tikzpicture}[x=.9cm,y=1cm]
 \node[box,text width=2.2cm] (input) at (0,0) {Circuit file\\+ threshold};
 \node[box,text width=2.5cm] (features) at (3.6,0) {Extract circuit\\features};
-\node[box,text width=2.5cm] (gmm) at (7.6,0) {Fit GMM probabilistic clusters, assign cluster scores};
-\node[box,text width=2.3cm,fill=ModelTeal!10] (runtime) at (11.5,0) {Cluster-informed\\runtime estimate};
+\node[box,text width=2.5cm] (gmm) at (7.6,0) {Fit GMM soft clusters\\+ local regressors};
+\node[box,text width=2.3cm,fill=ModelTeal!10] (runtime) at (11.5,0) {Membership-weighted\\runtime estimate};
 \draw[arr] (input)--(features); \draw[arr] (features)--(gmm); \draw[arr] (gmm)--(runtime);
 \end{tikzpicture}
 \vspace{.25cm}
 \begin{itemize}
-\item GMM groups circuits with similar measured runtime patterns; probabilities express uncertain cluster membership.
-\item Use the identified groups to characterize runtime behavior across circuit settings.
+\item GMM groups circuits by structural features; probabilities express uncertain cluster membership.
+\item A local regressor in each cluster predicts log-runtime; membership weights combine their estimates.
 \end{itemize}
+\takeaway{Challenge score: 76.42\%}
 \end{frame}
 
 \begin{frame}{Tested Workflows: Graph Transformer}
@@ -152,6 +156,7 @@ Good estimation can lead to fewer failed jobs, better completion-time estimates,
 \item Graph features capture gate connectivity and global features summarize circuit size and gate counts.
 \item Combines pooled graph features with global features in a neural regressor.
 \end{itemize}
+\takeaway{Challenge score: 92.07\%}
 \end{frame}
 
 \begin{frame}{Tested Workflows: $k$-Nearest Neighbors}
@@ -168,6 +173,7 @@ Good estimation can lead to fewer failed jobs, better completion-time estimates,
 \item Neighbor similarity is computed from the circuit features and settings.
 \item Nearby labeled circuits provide the runtime estimate.
 \end{itemize}
+\takeaway{Challenge score: 90.46\%}
 \end{frame}
 
 \begin{frame}{Tested Workflows: ExtraTrees + Regression Model}
@@ -189,11 +195,13 @@ Good estimation can lead to fewer failed jobs, better completion-time estimates,
 \item \textbf{ExtraTrees:} many randomized decision trees combine their estimates.
 \item Classifier routes the job and a specialist estimates duration on a log scale
 \end{itemize}
+\takeaway{Challenge score: 91.95\%}
 \end{frame}
 
 \begin{frame}{Tested Workflows: Mock Simulator + Neural Network}
 \centering
 \includegraphics[width=\textwidth,height=5.5cm,keepaspectratio]{assets/nn_pipeline.pdf}
+\takeaway{Challenge score: 94.81\%}
 \end{frame}
 
 \begin{frame}
