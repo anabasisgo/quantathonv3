@@ -1,0 +1,20 @@
+{
+  "full_initial_run": {
+    "circuits": 532,
+    "predictions": 1596,
+    "max_parse_s": 20.0028,
+    "over_15_s_circuits": [
+      "0d08bd43.qasm",
+      "125f60d7.qasm",
+      "ebc3e166.qasm"
+    ]
+  },
+  "final_latency_recheck": {
+    "selection": "15 slowest circuits from initial run",
+    "circuits": 15,
+    "predictions": 45,
+    "max_parse_s": 13.4505,
+    "max_predict_s": 0.0114,
+    "over_15_s_circuits": []
+  }
+}

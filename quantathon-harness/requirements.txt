@@ -1,8 +1,3 @@
-# Harness itself needs only the Python standard library.
-# 'zstandard' lets the harness read .qasm.zst without the zstd CLI installed.
+# Runtime dependencies for circuit decompression and the bounded MPS probe.
 zstandard>=0.22
-
-# --- Add whatever YOUR model needs below (examples) ---
-# numpy
-# scikit-learn
-# joblib
+numpy>=1.26

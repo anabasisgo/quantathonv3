@@ -1,5 +1,9 @@
 # Quantathon — Submission Harness
 
+The `nick` branch's runnable probe-assisted model, training data, and retraining
+instructions are described in [PROBE_MODEL.md](PROBE_MODEL.md). The harness
+interface below is unchanged.
+
 Predict how long each circuit takes to simulate, straight from the `.qasm` file.
 This harness produces the **one file you send back to us**.
 
@@ -78,7 +82,7 @@ process, etc. — judged live, five equally-weighted categories). The automated 
 is **pure duration accuracy**, per `(circuit, threshold)`:
 
 ```
-score = max(0, 1 − |log10(pred / actual)| / 2)      # exact = 1.0, off by 10× = 0
+score = max(0, 1 − |log10(pred / actual)| / 2)      # exact = 1.0, off by 10× = 0.5
 ```
 
 Runtimes span seconds to hours, so accuracy is measured in **log scale** — being

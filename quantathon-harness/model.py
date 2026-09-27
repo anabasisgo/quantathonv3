@@ -4,10 +4,12 @@ import gzip
 import json
 import math
 import re
+import time
 from collections import Counter
 from pathlib import Path
 
 from tree_runtime import RuntimeModel as TreeRuntimeModel
+from probe_model import MAX_PROBE_OPS, ProbeRuntimeModel
 
 CAP_SECONDS = 4 * 60 * 60
 FEATURES = (
@@ -239,6 +241,7 @@ class RuntimeModel:
         self.model = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
         tree_dir = None if Path(artifacts_dir) == Path("artifacts") else artifacts_dir
         self.tree_model = TreeRuntimeModel(artifacts_dir=tree_dir)
+        self.probe_model = ProbeRuntimeModel(artifacts_dir=tree_dir)
         timeout_path = Path(artifacts_dir) / "timeout-classifier.json.gz"
         if not timeout_path.exists():
             timeout_path = Path(__file__).resolve().parent / artifacts_dir / "timeout-classifier.json.gz"
@@ -248,8 +251,14 @@ class RuntimeModel:
             raise ValueError("Unsupported timeout classifier artifact")
 
     def featurize(self, qasm_text: str) -> dict:
-        return {"knn": featurize(qasm_text),
-                "tree": self.tree_model.featurize(qasm_text)}
+        start = time.perf_counter()
+        knn = featurize(qasm_text)
+        tree = self.tree_model.featurize(qasm_text)
+        if knn["ops"] >= MAX_PROBE_OPS or time.perf_counter() - start > 8.0:
+            probe = {"usable": False, "reason": "large circuit budget"}
+        else:
+            probe = self.probe_model.featurize(qasm_text, deadline=start + 12.0)
+        return {"knn": knn, "tree": tree, "probe": probe}
 
     def _predict_knn(self, features: dict, threshold: int) -> float:
         if self.model and self.model.get("kind") in {"knn-v1", "knn-v2"} and str(threshold) in self.model["by_threshold"]:
@@ -292,4 +301,8 @@ class RuntimeModel:
             return float(CAP_SECONDS)
         knn_seconds = self._predict_knn(features["knn"], threshold)
         tree_seconds = self.tree_model.predict(features["tree"], threshold)
-        return float(min(CAP_SECONDS, math.sqrt(knn_seconds * tree_seconds)))
+        current_seconds = math.sqrt(knn_seconds * tree_seconds)
+        probe_seconds = self.probe_model.predict(features["knn"], features["probe"], threshold)
+        if probe_seconds is None:
+            return float(min(CAP_SECONDS, current_seconds))
+        return float(min(CAP_SECONDS, math.sqrt(current_seconds * probe_seconds)))
