@@ -98,6 +98,29 @@ Good estimation can lead to fewer failed jobs, better completion-time estimates,
     \vspace*{\fill}
 \end{frame}
 
+\begin{frame}{Baseline Model: Log-Linear Regression}
+\centering
+\vspace{.45cm}
+{\large The baseline predicts runtime on a base-10 logarithmic scale:}
+\vspace{.65cm}
+\begin{block}{Runtime estimate}
+\centering
+\large
+\begin{aligned}
+\log_{10}(\hat{t}) ={}& \beta_0 + \beta_q q + \beta_1\log_{10}(1+g_1)
+  + \beta_m\log_{10}(1+g_m)\\[2mm]
+  &+ \beta_d\log_{10}(1+d) + \beta_T\log_{10}(T/16)
+\end{aligned}
+\end{block}
+\vspace{.3cm}
+\begin{tikzpicture}[node distance=.45cm]
+\node[box,text width=3.1cm] (features) {Circuit and setting\features};
+\node[box,fill=ModelTeal!10,text width=3.1cm,right=of features] (prediction) {Predicted $\log_{10}(t)$};
+\node[box,text width=2.7cm,right=of prediction] (runtime) {Exponentiate to\estimate runtime $\hat{t}$};
+\draw[arr] (features)--(prediction); \draw[arr] (prediction)--(runtime);
+\end{tikzpicture}
+\end{frame}
+
 \begin{frame}{Tested Workflows: Gaussian Mixture Model}
 \centering
 \begin{tikzpicture}[x=.9cm,y=1cm]
