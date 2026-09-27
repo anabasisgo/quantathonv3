@@ -6,6 +6,7 @@ gates are approximated by a controlled-phase chain; measurement, reset and barri
 classically conditioned blocks are applied. Angle expressions go through a restricted arithmetic evaluator.
 """
 import ast
+from functools import lru_cache
 import math
 import re
 
@@ -29,7 +30,19 @@ _BIN = {ast.Add: lambda a, b: a + b, ast.Sub: lambda a, b: a - b, ast.Mult: lamb
 
 
 def evaluate(expr: str, env: dict) -> float:
-    """Restricted arithmetic: numbers, pi/tau/e, bound gate parameters, + - * / **, unary +/-, a few math functions."""
+    """Restricted arithmetic with cached constant expressions."""
+    if not env:
+        return _evaluate_constant(expr)
+    return _evaluate(expr, env)
+
+
+@lru_cache(maxsize=8192)
+def _evaluate_constant(expr: str) -> float:
+    return _evaluate(expr, {})
+
+
+def _evaluate(expr: str, env: dict) -> float:
+    """Numbers, constants, bound parameters, basic arithmetic, and selected math functions."""
     def walk(node, depth=0):
         if depth > 40:
             raise ValueError('too deep')
@@ -62,6 +75,11 @@ def evaluate(expr: str, env: dict) -> float:
 
 
 def _split(s):
+    if '(' not in s and ')' not in s:
+        parts = [part.strip() for part in s.split(',')]
+        if parts and not parts[-1]:
+            parts.pop()
+        return parts
     out, depth, cur = [], 0, []
     for ch in s:
         depth += (ch == '(') - (ch == ')')
@@ -100,6 +118,8 @@ def parse(text: str, max_chars: int, max_ops: int) -> Circuit:
     regs, defs = {}, {}
     pending, start, body, head, in_block = [], 0, None, None, 0
 
+    # Many operations reuse the same indexed qubits; declarations clear this cache below.
+    @lru_cache(maxsize=8192)
     def operand(tok):
         m = _IDX.match(tok.strip())
         if m:
@@ -132,7 +152,8 @@ def parse(text: str, max_chars: int, max_ops: int) -> Circuit:
     try:
         for tok in _STMT.finditer(text):
             d = tok.group()
-            stmt = (''.join(pending) + text[start:tok.start()]).strip()
+            fragment = text[start:tok.start()]
+            stmt = (''.join(pending) + fragment).strip() if pending else fragment.strip()
             pending, start = [], tok.end()
             if d.startswith('/'):           # comment: keep the partial statement
                 pending.append(stmt + ' ')
@@ -163,21 +184,26 @@ def parse(text: str, max_chars: int, max_ops: int) -> Circuit:
             word = stmt.split(None, 1)[0]
             if word in _SKIP or word.startswith('bit['):
                 continue
-            m = _QREG.match(stmt)
-            if m:
-                regs[m.group(1)] = (C.n, int(m.group(2)))
-                C.n += int(m.group(2))
-                continue
-            m = _QUBITS.match(stmt)
-            if m:
-                regs[m.group(2)] = (C.n, int(m.group(1)))
-                C.n += int(m.group(1))
-                continue
-            m = _QUBIT.match(stmt)
-            if m:
-                regs[m.group(1)] = (C.n, 1)
-                C.n += 1
-                continue
+            if word == 'qreg':
+                m = _QREG.match(stmt)
+                if m:
+                    regs[m.group(1)] = (C.n, int(m.group(2)))
+                    C.n += int(m.group(2))
+                    operand.cache_clear()
+                    continue
+            if word == 'qubit' or word.startswith('qubit['):
+                m = _QUBITS.match(stmt)
+                if m:
+                    regs[m.group(2)] = (C.n, int(m.group(1)))
+                    C.n += int(m.group(1))
+                    operand.cache_clear()
+                    continue
+                m = _QUBIT.match(stmt)
+                if m:
+                    regs[m.group(1)] = (C.n, 1)
+                    C.n += 1
+                    operand.cache_clear()
+                    continue
             if '=' in stmt and 'measure' in stmt:
                 continue
             if stmt.startswith('if'):
@@ -193,6 +219,14 @@ def parse(text: str, max_chars: int, max_ops: int) -> Circuit:
             except Exception:
                 continue
             if not groups:
+                continue
+            if len(groups) == 1 and len(groups[0]) == 1:
+                emit(m.group(1), (groups[0][0],), params)
+                continue
+            if len(groups) == 2 and len(groups[0]) == len(groups[1]) == 1:
+                a, b = groups[0][0], groups[1][0]
+                if a != b:
+                    emit(m.group(1), (a, b), params)
                 continue
             width = max(len(g) for g in groups)
             for k in range(width):

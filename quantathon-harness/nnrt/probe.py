@@ -27,6 +27,7 @@ def bond_bound(C, thresholds=config.THRESHOLDS):
     cap = np.minimum(np.arange(1, n), n - np.arange(1, n)).astype(float)
     b = np.zeros(n - 1)
     cost = dict.fromkeys(thresholds, 0.0)
+    cost_terms = {}  # Reuse threshold costs once a span reaches the same bond bound.
     spans = []
     for name, qs, _ in C.ops:
         if len(qs) != 2:
@@ -34,9 +35,13 @@ def bond_bound(C, thresholds=config.THRESHOLDS):
         i, j = sorted(qs)
         spans.append(j - i)
         b[i:j] = np.minimum(b[i:j] + SCHMIDT_BITS.get(name, 1), cap[i:j])
-        chi = 2.0 ** b[i:j].max()
-        for t in thresholds:
-            cost[t] += (j - i) * min(chi, t) ** 3
+        bits = b[i:j].max()
+        terms = cost_terms.get(bits)
+        if terms is None:
+            chi = 2.0 ** bits
+            terms = cost_terms[bits] = tuple(min(chi, t) ** 3 for t in thresholds)
+        for t, term in zip(thresholds, terms):
+            cost[t] += (j - i) * term
     out.update(span_mean=float(np.mean(spans)) if spans else 0.0, span_max=float(max(spans, default=0)),
                bound_max_log2=float(b.max()), bound_mean_log2=float(b.mean()))
     for t in thresholds:
@@ -88,16 +93,19 @@ class MPS:
         except np.linalg.LinAlgError:
             return
         self.svds += 1
-        norm = float((s ** 2).sum()) or 1.0
+        all_squares = s ** 2
+        norm = float(all_squares.sum()) or 1.0
         keep = max(1, int((s > 1e-10 * s[0]).sum())) if s.size else 1
         if keep > self.chi:
-            self.discarded += float((s[self.chi:keep] ** 2).sum()) / norm
+            self.discarded += float(all_squares[self.chi:keep].sum()) / norm
             self.trunc_events += 1
             keep = self.chi
         s = s[:keep]
-        p = s ** 2 / (s ** 2).sum()
+        squares = all_squares[:keep]
+        weight = squares.sum()
+        p = squares / weight
         self.max_entropy = max(self.max_entropy, float(-(p * np.log2(p + 1e-300)).sum()))
-        s = s / math.sqrt((s ** 2).sum())
+        s = s / math.sqrt(weight)
         self.A[i] = Uu[:, :keep].reshape(l, 2, keep)
         self.A[i + 1] = (s[:, None] * Vh[:keep]).reshape(keep, 2, r)
         self.center = i + 1
