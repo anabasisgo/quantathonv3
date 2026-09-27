@@ -1,0 +1,68 @@
+{"variant": "none", "model": "ET", "cv5": 89.05, "t16": 90.63, "t64": 89.05, "t512": 87.14, "larger_distinct_sizes": 83.31, "lo_qasm3": 73.16, "lo_other_qasm2": 68.3, "lo_sycamore_like_qasm2": 87.49, "sec": 6}
+{"variant": "none", "model": "SVR", "cv5": 90.63, "t16": 92.28, "t64": 90.81, "t512": 88.38, "larger_distinct_sizes": 82.48, "lo_qasm3": 67.41, "lo_other_qasm2": 55.9, "lo_sycamore_like_qasm2": 77.19, "sec": 14}
+{"variant": "struct_only", "model": "ET", "cv5": 88.95, "t16": 91.07, "t64": 89.08, "t512": 86.2, "larger_distinct_sizes": 80.84, "lo_qasm3": 69.6, "lo_other_qasm2": 69.04, "lo_sycamore_like_qasm2": 84.29, "sec": 6}
+{"variant": "struct_only", "model": "SVR", "cv5": 91.46, "t16": 92.97, "t64": 91.0, "t512": 90.18, "larger_distinct_sizes": 83.91, "lo_qasm3": 70.6, "lo_other_qasm2": 60.48, "lo_sycamore_like_qasm2": 86.63, "sec": 14}
+{"variant": "c4b0.5", "model": "ET", "cv5": 91.89, "t16": 92.33, "t64": 91.59, "t512": 91.71, "larger_distinct_sizes": 82.47, "lo_qasm3": 74.92, "lo_other_qasm2": 73.47, "lo_sycamore_like_qasm2": 88.85, "sec": 7}
+{"variant": "c4b0.5", "model": "SVR", "cv5": 93.01, "t16": 93.55, "t64": 92.75, "t512": 92.66, "larger_distinct_sizes": 83.2, "lo_qasm3": 75.98, "lo_other_qasm2": 65.92, "lo_sycamore_like_qasm2": 76.41, "sec": 12}
+{"variant": "c8b0.5", "model": "ET", "cv5": 92.08, "t16": 92.6, "t64": 91.69, "t512": 91.9, "larger_distinct_sizes": 82.6, "lo_qasm3": 75.61, "lo_other_qasm2": 75.11, "lo_sycamore_like_qasm2": 88.3, "sec": 7}
+{"variant": "c8b0.5", "model": "SVR", "cv5": 93.17, "t16": 93.62, "t64": 92.88, "t512": 92.98, "larger_distinct_sizes": 84.74, "lo_qasm3": 75.89, "lo_other_qasm2": 66.67, "lo_sycamore_like_qasm2": 71.27, "sec": 11}
+{"variant": "c8b1.5", "model": "ET", "cv5": 92.28, "t16": 92.67, "t64": 91.77, "t512": 92.43, "larger_distinct_sizes": 82.23, "lo_qasm3": 76.1, "lo_other_qasm2": 75.41, "lo_sycamore_like_qasm2": 89.2, "sec": 7}
+{"variant": "c8b1.5", "model": "SVR", "cv5": 93.23, "t16": 93.82, "t64": 92.44, "t512": 93.46, "larger_distinct_sizes": 85.56, "lo_qasm3": 75.78, "lo_other_qasm2": 64.2, "lo_sycamore_like_qasm2": 70.05, "sec": 11}
+{"variant": "c16b0.3", "model": "ET", "cv5": 91.71, "t16": 91.98, "t64": 91.8, "t512": 91.28, "larger_distinct_sizes": 82.53, "lo_qasm3": 75.31, "lo_other_qasm2": 75.28, "lo_sycamore_like_qasm2": 89.79, "sec": 7}
+{"variant": "c16b0.3", "model": "SVR", "cv5": 92.83, "t16": 93.04, "t64": 92.74, "t512": 92.66, "larger_distinct_sizes": 86.51, "lo_qasm3": 76.39, "lo_other_qasm2": 67.33, "lo_sycamore_like_qasm2": 83.65, "sec": 11}
+{"variant": "c16b1.0", "model": "ET", "cv5": 91.97, "t16": 92.34, "t64": 91.53, "t512": 92.04, "larger_distinct_sizes": 82.91, "lo_qasm3": 75.72, "lo_other_qasm2": 75.94, "lo_sycamore_like_qasm2": 88.71, "sec": 7}
+{"variant": "c16b1.0", "model": "SVR", "cv5": 93.31, "t16": 93.72, "t64": 92.68, "t512": 93.58, "larger_distinct_sizes": 86.93, "lo_qasm3": 77.49, "lo_other_qasm2": 66.81, "lo_sycamore_like_qasm2": 81.03, "sec": 11}
+{"variant": "c32b3.0", "model": "ET", "cv5": 92.27, "t16": 92.69, "t64": 91.91, "t512": 92.21, "larger_distinct_sizes": 83.47, "lo_qasm3": 75.67, "lo_other_qasm2": 76.09, "lo_sycamore_like_qasm2": 90.8, "sec": 7}
+{"variant": "c32b3.0", "model": "SVR", "cv5": 93.02, "t16": 93.73, "t64": 92.61, "t512": 92.65, "larger_distinct_sizes": 87.31, "lo_qasm3": 76.76, "lo_other_qasm2": 65.85, "lo_sycamore_like_qasm2": 82.45, "sec": 11}
+{"variant": "c16b3.0", "model": "ET", "cv5": 92.4, "t16": 92.66, "t64": 91.89, "t512": 92.69, "larger_distinct_sizes": 82.89, "lo_qasm3": 76.23, "lo_other_qasm2": 76.18, "lo_sycamore_like_qasm2": 88.57, "sec": 7}
+{"variant": "c16b3.0", "model": "SVR", "cv5": 93.3, "t16": 93.76, "t64": 92.48, "t512": 93.73, "larger_distinct_sizes": 86.31, "lo_qasm3": 76.17, "lo_other_qasm2": 66.08, "lo_sycamore_like_qasm2": 83.46, "sec": 11}
+{"variant": "c4b0.5+c16b1.0", "model": "ET", "cv5": 92.16, "t16": 92.53, "t64": 91.79, "t512": 92.15, "larger_distinct_sizes": 83.16, "lo_qasm3": 75.48, "lo_other_qasm2": 74.75, "lo_sycamore_like_qasm2": 90.33, "sec": 8}
+{"variant": "c4b0.5+c16b1.0", "model": "SVR", "cv5": 93.37, "t16": 93.74, "t64": 92.83, "t512": 93.59, "larger_distinct_sizes": 84.73, "lo_qasm3": 76.58, "lo_other_qasm2": 66.08, "lo_sycamore_like_qasm2": 81.7, "sec": 12}
+{"width": 8, "depth": 2, "wd": 0.01, "params": 473, "cv5": 90.53, "larger_distinct_sizes": 83.12, "lo_qasm3": 76.31, "lo_other_qasm2": 74.16, "lo_sycamore_like_qasm2": 89.55, "sec": 32}
+{"width": 32, "depth": 2, "wd": 0.01, "params": 2657, "cv5": 93.06, "larger_distinct_sizes": 87.3, "lo_qasm3": 79.91, "lo_other_qasm2": 75.83, "lo_sycamore_like_qasm2": 84.07, "sec": 44}
+{"width": 128, "depth": 2, "wd": 0.01, "params": 22913, "cv5": 93.65, "larger_distinct_sizes": 90.86, "lo_qasm3": 80.27, "lo_other_qasm2": 76.1, "lo_sycamore_like_qasm2": 81.06, "sec": 99}
+{"width": 64, "depth": 1, "wd": 0.01, "params": 3201, "cv5": 92.11, "larger_distinct_sizes": 87.65, "lo_qasm3": 76.97, "lo_other_qasm2": 70.81, "lo_sycamore_like_qasm2": 82.23, "sec": 48}
+{"width": 64, "depth": 3, "wd": 0.01, "params": 11521, "cv5": 93.73, "larger_distinct_sizes": 89.85, "lo_qasm3": 78.66, "lo_other_qasm2": 77.58, "lo_sycamore_like_qasm2": 79.79, "sec": 75}
+{"width": 64, "depth": 2, "wd": 0.1, "params": 7361, "cv5": 93.23, "larger_distinct_sizes": 88.82, "lo_qasm3": 79.88, "lo_other_qasm2": 75.8, "lo_sycamore_like_qasm2": 81.91, "sec": 62}
+{"width": 256, "depth": 2, "wd": 0.01, "params": 78593, "cv5": 94.21, "larger_distinct_sizes": 91.18, "lo_qasm3": 80.41, "lo_other_qasm2": 76.41, "lo_sycamore_like_qasm2": 80.37, "sec": 248}
+{"variant": "c16b3.0", "model": "ET", "probe_only_if_p>=": null, "frac_circuits_probed": 1.0, "cv5": 92.39, "t16": 92.74, "t64": 91.85, "t512": 92.63}
+{"variant": "c16b3.0", "model": "SVR", "probe_only_if_p>=": null, "frac_circuits_probed": 1.0, "cv5": 93.3, "t16": 93.76, "t64": 92.48, "t512": 93.73}
+{"variant": "c16b3.0", "model": "ET", "probe_only_if_p>=": 0.5, "frac_circuits_probed": 0.417, "cv5": 90.5, "t16": 91.3, "t64": 90.69, "t512": 89.29}
+{"variant": "c16b3.0", "model": "SVR", "probe_only_if_p>=": 0.5, "frac_circuits_probed": 0.417, "cv5": 92.08, "t16": 93.11, "t64": 91.93, "t512": 91.02}
+{"variant": "c16b3.0", "model": "ET", "probe_only_if_p>=": 0.2, "frac_circuits_probed": 0.517, "cv5": 90.47, "t16": 91.12, "t64": 90.64, "t512": 89.46}
+{"variant": "c16b3.0", "model": "SVR", "probe_only_if_p>=": 0.2, "frac_circuits_probed": 0.517, "cv5": 91.46, "t16": 92.22, "t64": 91.08, "t512": 90.98}
+base cv 91.97
+ALL probe (simulation)             22.754
+ALL structural bound               19.321
+pv_c16b1.0_log_discarded            6.047
+pv_c16b1.0_max_entropy              5.439
+pv_c16b1.0_first_sat_frac           3.854
+st_struct_logcost_512               3.104
+pv_c16b1.0_log_flops                3.089
+st_struct_frac_bonds_ge_512         2.986
+pv_c16b1.0_frac_ops_done            2.857
+st_struct_logcost_16                2.566
+st_struct_logcost_64                2.430
+st_struct_frac_bonds_ge_64          1.975
+st_struct_frac_bonds_ge_16          1.811
+pv_c16b1.0_mean_log2_bond           1.603
+pv_c16b1.0_frac_bonds_saturated     1.220
+pv_c16b1.0_trunc_frac               0.667
+st_bound_max_log2                   0.622
+st_bound_mean_log2                  0.510
+st_span_mean                        0.150
+st_span_max                         0.108
+{"features": "qubits+probe", "n": 9, "model": "ET", "cv5": 80.7, "larger_distinct_sizes": 79.32, "lo_qasm3": 71.06, "lo_other_qasm2": 68.43, "lo_sycamore_like_qasm2": 84.87}
+{"features": "qubits+2q+probe", "n": 10, "model": "ET", "cv5": 83.8, "larger_distinct_sizes": 81.47, "lo_qasm3": 73.71, "lo_other_qasm2": 72.59, "lo_sycamore_like_qasm2": 86.29}
+{"features": "qubits+2q+depth+probe", "n": 11, "model": "ET", "cv5": 84.65, "larger_distinct_sizes": 81.77, "lo_qasm3": 74.84, "lo_other_qasm2": 73.57, "lo_sycamore_like_qasm2": 87.38}
+{"features": "compact+probe(c16b1)", "n": 44, "model": "ET", "cv5": 91.97, "larger_distinct_sizes": 82.91, "lo_qasm3": 75.72, "lo_other_qasm2": 75.94, "lo_sycamore_like_qasm2": 88.71}
+{"features": "full325", "n": 325, "model": "ET", "cv5": 89.4, "larger_distinct_sizes": 81.84, "lo_qasm3": 72.27, "lo_other_qasm2": 70.71, "lo_sycamore_like_qasm2": 75.99}
+{"features": "full325+probe(c16b1)", "n": 343, "model": "ET", "cv5": 91.5, "larger_distinct_sizes": 82.29, "lo_qasm3": 78.51, "lo_other_qasm2": 73.81, "lo_sycamore_like_qasm2": 80.82}
+{"features": "qubits+probe", "n": 9, "model": "SVR", "cv5": 88.61, "larger_distinct_sizes": 75.64, "lo_qasm3": 68.31, "lo_other_qasm2": 62.93, "lo_sycamore_like_qasm2": 81.86}
+{"features": "qubits+2q+probe", "n": 10, "model": "SVR", "cv5": 90.55, "larger_distinct_sizes": 82.94, "lo_qasm3": 76.45, "lo_other_qasm2": 74.03, "lo_sycamore_like_qasm2": 76.32}
+{"features": "qubits+2q+depth+probe", "n": 11, "model": "SVR", "cv5": 91.03, "larger_distinct_sizes": 83.0, "lo_qasm3": 75.39, "lo_other_qasm2": 73.14, "lo_sycamore_like_qasm2": 81.08}
+{"features": "compact+probe(c16b1)", "n": 44, "model": "SVR", "cv5": 93.31, "larger_distinct_sizes": 86.93, "lo_qasm3": 77.49, "lo_other_qasm2": 66.81, "lo_sycamore_like_qasm2": 81.03}
+{"features": "full325", "n": 325, "model": "SVR", "cv5": 88.9, "larger_distinct_sizes": 82.18, "lo_qasm3": 56.85, "lo_other_qasm2": 50.65, "lo_sycamore_like_qasm2": 61.94}
+{"features": "full325+probe(c16b1)", "n": 343, "model": "SVR", "cv5": 90.29, "larger_distinct_sizes": 81.64, "lo_qasm3": 50.89, "lo_other_qasm2": 49.12, "lo_sycamore_like_qasm2": 58.76}
+{"probe": "c16b1.0", "width": 256, "depth": 2, "wd": 0.01, "params": 78593, "cv5": 94.2, "larger_distinct_sizes": 91.43, "lo_qasm3": 81.48, "lo_other_qasm2": 76.41, "lo_sycamore_like_qasm2": 84.56, "sec": 246}
+{"probe": "c4b0.5", "width": 256, "depth": 2, "wd": 0.01, "params": 78593, "cv5": 94.28, "larger_distinct_sizes": 87.9, "lo_qasm3": 81.26, "lo_other_qasm2": 74.89, "lo_sycamore_like_qasm2": 86.35, "sec": 248}
