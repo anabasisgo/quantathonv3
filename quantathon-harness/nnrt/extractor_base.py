@@ -1,4 +1,4 @@
-# Vendored from the team feature pipeline (data_first/feature_v3/base_extractor.py), unchanged except this header.
+# Vendored from the team feature pipeline (data_first/feature_v3/base_extractor.py); local docstrings added.
 """Version 2 structural OpenQASM extractor for runtime-prediction research.
 
 The public entry point is ``extract_features(qasm_text, budget_s=10)``. It uses
@@ -63,6 +63,7 @@ class _Summary:
 
 
 def _blank(n: int | None, issues: list[str]) -> dict[str, Any]:
+    """Return the standard result shape with unavailable fields marked null."""
     return {
         "n_qubits": n,
         "primitive_counts": None,
@@ -116,11 +117,13 @@ def _quick_registers(text: str) -> tuple[int | None, dict[str, tuple[int, int]]]
 
 
 def _check_budget(deadline: float) -> None:
+    """Stop extraction once the caller's wall-clock deadline is reached."""
     if time.perf_counter() >= deadline:
         raise _Budget
 
 
 def _parse_header(header: str) -> tuple[str, tuple[str, ...]]:
+    """Read a custom gate's name and formal qubit operands."""
     rest = header.strip()[4:].strip()  # remove `gate`
     match = _NAME.match(rest)
     if not match:
@@ -205,6 +208,7 @@ def _split_structure(text: str, deadline: float) -> tuple[dict[str, _Macro], lis
 
 
 def _parse_call(statement: str) -> tuple[str, tuple[str, ...]]:
+    """Read a gate call and its operands, skipping angle parameters."""
     statement = statement.strip()
     match = _NAME.match(statement)
     if not match:
@@ -231,6 +235,7 @@ def _parse_call(statement: str) -> tuple[str, tuple[str, ...]]:
 
 
 def _arity_ok(name: str, arity: int) -> bool:
+    """Check a built-in gate's qubit count against its supported arity."""
     if name in _ONE_Q:
         return arity == 1
     if name in _TWO_Q:
@@ -243,6 +248,7 @@ def _arity_ok(name: str, arity: int) -> bool:
 
 
 def _pairs(values: tuple[int, ...] | list[int]):
+    """Yield sorted distinct qubit pairs induced by a multi-qubit call."""
     for i, a in enumerate(values):
         for b in values[i + 1:]:
             if a != b:
@@ -256,6 +262,7 @@ def _summary_for(
     active: set[str],
     deadline: float,
 ) -> _Summary:
+    """Memoize a custom gate's expanded counts and formal-qubit graph edges."""
     if name in cache:
         return cache[name]
     if name in active:
@@ -312,6 +319,7 @@ def _summary_for(
 
 
 def _resolve_operand(token: str, registers: dict[str, tuple[int, int]], env: dict[str, int] | None = None) -> list[int]:
+    """Resolve an indexed qubit, whole register, or gate formal to indices."""
     token = token.strip()
     if env is not None and token in env:
         return [env[token]]
@@ -331,6 +339,7 @@ def _resolve_operand(token: str, registers: dict[str, tuple[int, int]], env: dic
 
 
 def _broadcast(args: tuple[str, ...], registers: dict[str, tuple[int, int]], env: dict[str, int] | None = None) -> list[tuple[int, ...]]:
+    """Expand register operands into individual gate invocations."""
     groups = [_resolve_operand(arg, registers, env) for arg in args]
     if not groups:
         raise _Unsupported("gate_without_qubits")
@@ -347,6 +356,7 @@ def _broadcast(args: tuple[str, ...], registers: dict[str, tuple[int, int]], env
 
 
 def _measurement_operand(statement: str) -> str:
+    """Extract the quantum operand from QASM 2 or QASM 3 measurement syntax."""
     if statement.startswith("measure "):
         return statement[8:].split("->", 1)[0].strip()
     match = re.search(r"=\s*measure\s+(.+)$", statement)
@@ -356,6 +366,7 @@ def _measurement_operand(statement: str) -> str:
 
 
 def _edges_list(edges: Counter[tuple[int, int]]) -> list[list[int]]:
+    """Serialize nonzero weighted edges in stable qubit order."""
     return [[a, b, count] for (a, b), count in sorted(edges.items()) if count]
 
 
@@ -363,6 +374,7 @@ def _depth_for(
     top: list[str], macros: dict[str, _Macro], registers: dict[str, tuple[int, int]],
     n: int, expanded_operations: int, deadline: float,
 ) -> tuple[int | None, int | None, int | None, list[str]]:
+    """Compute ordered gate depth when the expanded operation count is bounded."""
     if expanded_operations > _DEPTH_OPERATION_LIMIT:
         return None, None, None, ["depth_operation_limit"]
     depth = [0] * n

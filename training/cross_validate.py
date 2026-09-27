@@ -10,6 +10,7 @@ from common import Preprocessor, config, design, device, load_table, predict_net
 
 
 def main():
+    """Train each held-out fold and report official scores and error metrics."""
     df = load_table()
     dev = device()
     oof = np.zeros(len(df))

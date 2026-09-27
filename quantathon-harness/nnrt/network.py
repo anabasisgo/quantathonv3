@@ -15,7 +15,10 @@ def _gelu(x):  # exact GELU, matching torch.nn.GELU()
 
 
 class RuntimeNetwork:
+    """Load the saved preprocessing arrays and average the five MLP outputs."""
+
     def __init__(self, artifacts_dir):
+        """Validate feature order against metadata before loading ensemble weights."""
         path = Path(artifacts_dir)
         meta = json.loads((path / 'nn_a.json').read_text())
         if meta['features'] != config.FEATURES:
@@ -26,6 +29,7 @@ class RuntimeNetwork:
         self.nets = [[(w[f's{s}_W{k}'], w[f's{s}_b{k}']) for k in range(meta['n_layers'])] for s in range(meta['n_seeds'])]
 
     def _inputs(self, feats, threshold):
+        """Apply training preprocessing and append threshold indicators."""
         x = np.array([feats.get(k, np.nan) for k in config.FEATURES], dtype=np.float64)
         x = np.sign(x) * np.log1p(np.abs(x))
         x = np.where(np.isnan(x), self.median, x)
@@ -36,6 +40,7 @@ class RuntimeNetwork:
         return np.concatenate([x, onehot])
 
     def predict_log10(self, feats, threshold):
+        """Return the ensemble mean prediction in log10 seconds."""
         x0 = self._inputs(feats, threshold)
         outs = []
         for layers in self.nets:

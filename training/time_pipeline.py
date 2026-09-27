@@ -18,6 +18,7 @@ from model import RuntimeModel  # noqa: E402
 
 
 def main():
+    """Measure read, feature, and prediction stages in harness call order."""
     ap = argparse.ArgumentParser()
     ap.add_argument('--circuits', default=str(ROOT / 'training_circuits'))
     args = ap.parse_args()

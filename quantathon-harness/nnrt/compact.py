@@ -13,6 +13,10 @@ NAN = float('nan')
 
 
 def compact_features(qasm_text: str, budget_s: float) -> dict:
+    """Map reliable extractor counts, graph statistics, and depth to model inputs.
+
+    Values without an exactness flag remain NaN and are imputed by the network.
+    """
     res = extract_features(qasm_text, budget_s=budget_s)
     f = {k: NAN for k in COMPACT_FEATURES}
     n = res.get('n_qubits')

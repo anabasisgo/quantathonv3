@@ -9,9 +9,10 @@ This harness produces the **one file you send back to us**.
 pip install -r requirements.txt
 ```
 
-## What you edit
+## Model code
 
-**Only `model.py`.** Implement these methods:
+`model.py` exposes these methods to the harness. The implementation also lives
+in `nnrt/`; `run.py` is the organizer's runner.
 
 | Method | Job | Called |
 |---|---|---|
@@ -22,8 +23,8 @@ pip install -r requirements.txt
 There is no timeout flag — if you think a run will time out, just predict a duration
 **≥ the 4-hour cap (14400 s)**.
 
-A trivial baseline is already in `model.py` so the harness runs before you touch
-anything. Replace its body with your real parser and model.
+This repository includes the trained NN A implementation and its required files
+in `artifacts/`.
 
 **Caps:** `featurize` and `predict` must each run in **≤ 15 s per circuit**. The
 harness times you and warns on anything over.
@@ -32,8 +33,8 @@ harness times you and warns on anything over.
 
 | Path | Contents |
 |---|---|
-| `circuits/` | the training circuits, one `<id>.qasm.zst` per circuit |
-| `runtime-data.csv` | training labels, one row per `(circuit, threshold)` run |
+| `../training_circuits/` | the training circuits, one `<id>.qasm.zst` per circuit |
+| `../runtime-data.csv` | training labels, one row per `(circuit, threshold)` run |
 
 The circuits are `zstd`-compressed. `run.py` decompresses them for you, so you
 don't need raw files to run the harness. To get raw `.qasm` files for exploring
@@ -44,14 +45,13 @@ each circuit twice.
 
 ## Run it
 
-1. `circuits/` already holds the training circuits. In the final hours we DM you
-   the hold-out circuits: put them in `circuits/` too (`.qasm` or `.qasm.zst`,
-   subfolders are fine). Only hold-out runs are scored, so you can remove the
-   training circuits first to make the run faster.
+1. Point `--circuits` at the directory you want to score. The repository's
+   training set is in `../training_circuits/`. A separate hold-out directory
+   can contain `.qasm` or `.qasm.zst` files in subfolders.
 2. Generate your submission:
 
 ```bash
-python run.py --team "Your Team Name"
+python run.py --team "Your Team Name" --circuits ../training_circuits
 ```
 
 This writes **`submission.csv`**:
@@ -68,7 +68,7 @@ You have the training labels (`runtime-data.csv`). Run `run.py` on the training
 circuits, then score yourself with the *exact* metric we use:
 
 ```bash
-python score.py --pred submission.csv --labels runtime-data.csv
+python score.py --pred submission.csv --labels ../runtime-data.csv
 ```
 
 ## How the automated third is scored

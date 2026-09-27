@@ -11,6 +11,7 @@ from common import (ARTIFACTS, EPOCHS, LAYERS, LR, SEEDS, WEIGHT_DECAY, Preproce
 
 
 def main():
+    """Fit the final ensemble, export artifacts, and check NumPy parity."""
     df = load_table()
     dev = device()
     pre = Preprocessor().fit(df[config.FEATURES].astype(float).values)

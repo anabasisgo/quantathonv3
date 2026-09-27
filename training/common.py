@@ -48,6 +48,7 @@ class Preprocessor:
     """Signed log1p -> training-median imputation -> drop constant columns -> standardize (fit on training rows)."""
 
     def fit(self, X):
+        """Fit imputation and scaling on training rows only."""
         Z = np.sign(X) * np.log1p(np.abs(X))
         med = np.nanmedian(Z, axis=0)
         self.median = np.where(np.isnan(med), 0.0, med)
@@ -57,12 +58,14 @@ class Preprocessor:
         return self
 
     def transform(self, X):
+        """Apply the fitted preprocessing and select nonconstant columns."""
         Z = np.sign(X) * np.log1p(np.abs(X))
         Z = np.where(np.isnan(Z), self.median, Z)
         return (Z[:, self.keep] - self.mu) / self.sd
 
 
 def threshold_inputs(thresholds):
+    """Encode each threshold as three indicators and an ordinal coordinate."""
     idx = np.array([config.THRESHOLDS.index(int(t)) for t in thresholds])
     out = np.zeros((len(idx), 4))
     out[np.arange(len(idx)), idx] = 1.0
@@ -71,10 +74,12 @@ def threshold_inputs(thresholds):
 
 
 def design(df, pre):
+    """Concatenate normalized circuit features with threshold inputs."""
     return np.hstack([pre.transform(df[config.FEATURES].astype(float).values), threshold_inputs(df.threshold)])
 
 
 def train_network(X, y, seed, device):
+    """Train one seeded MLP on log10 runtimes using the shared recipe."""
     import torch
     torch.manual_seed(seed)
     layers, d = [], X.shape[1]
@@ -97,6 +102,7 @@ def train_network(X, y, seed, device):
 
 
 def predict_networks(nets, X, device):
+    """Average log10 predictions from the trained PyTorch networks."""
     import torch
     with torch.no_grad():
         Xt = torch.tensor(X, dtype=torch.float32, device=device)
@@ -104,5 +110,6 @@ def predict_networks(nets, X, device):
 
 
 def device():
+    """Select CUDA when available, otherwise CPU, for training."""
     import torch
     return torch.device('cuda' if torch.cuda.is_available() else 'cpu')

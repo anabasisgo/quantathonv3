@@ -18,6 +18,7 @@ import nnrt
 
 
 def featurize_file(path):
+    """Decompress one circuit and return model features with stage timings."""
     with open(path, 'rb') as fh, zstandard.ZstdDecompressor().stream_reader(fh) as reader:
         text = reader.read().decode('utf-8', 'replace')
     feats = nnrt.featurize(text)
@@ -26,6 +27,7 @@ def featurize_file(path):
 
 
 def main():
+    """Build the sorted feature table, using worker processes for circuits."""
     ap = argparse.ArgumentParser()
     ap.add_argument('--circuits', default=str(ROOT / 'training_circuits'))
     ap.add_argument('--workers', type=int, default=2)

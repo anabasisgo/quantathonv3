@@ -20,6 +20,7 @@ NAN = float('nan')
 
 
 def bond_bound(C, thresholds=config.THRESHOLDS):
+    """Estimate per-cut bond growth and threshold costs from ordered 2q gates."""
     n = C.n
     out = {k: NAN for k in config.BOUND_FEATURES}
     if n < 2:
@@ -63,9 +64,11 @@ class MPS:
         self.svds = self.trunc_events = 0
 
     def one(self, U, i):
+        """Apply a one-qubit unitary without moving the canonical center."""
         self.A[i] = np.einsum('ab,xby->xay', U, self.A[i])
 
     def _move_center(self, k):
+        """Shift the canonical center to ``k`` by successive QR factorizations."""
         while self.center < k:
             c = self.center
             l, _, r = self.A[c].shape
@@ -82,6 +85,7 @@ class MPS:
             self.center -= 1
 
     def _two_adjacent(self, U4, i):
+        """Apply a neighboring two-qubit unitary and truncate its shared bond."""
         self._move_center(i)
         a, b = self.A[i], self.A[i + 1]
         l, r = a.shape[0], b.shape[2]
@@ -121,10 +125,16 @@ class MPS:
             self._two_adjacent(SWAP, k)
 
     def bonds(self):
+        """Return the current dimension of each bond between neighboring sites."""
         return np.array([self.A[k].shape[2] for k in range(self.n - 1)])
 
 
 def simulate(C, chi=config.PROBE_BOND_CAP, work_budget=config.PROBE_WORK_BUDGET):
+    """Run the truncated MPS probe until the work or safety wall limit.
+
+    Features summarize the visited prefix, including saturation and the
+    fraction of parsed operations completed.
+    """
     out = {k: NAN for k in config.PROBE_FEATURES}
     if C.n < 2 or not C.ops:
         return out

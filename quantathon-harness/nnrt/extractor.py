@@ -1,4 +1,4 @@
-# Vendored from the team feature pipeline (data_first/feature_v3/extractor.py); only the import of the base module changed.
+# Vendored from the team feature pipeline (data_first/feature_v3/extractor.py); local import and docstrings updated.
 """Bounded v3 extension: stream large QASM into unordered structural summaries.
 
 The small-input path is the frozen v2 implementation. The streaming path does
@@ -19,6 +19,7 @@ _MAX_UNIQUE_CALLS = 200_000
 
 
 def _call_key(statement):
+    """Return a gate name and operand text, ignoring gate-angle parameters."""
     match = _CALL.fullmatch(statement)
     if match:
         return match.group(1), match.group(2).strip()
@@ -110,6 +111,11 @@ def _stream_structure(text, deadline):
 
 
 def _stream_features(text, n, registers, deadline):
+    """Aggregate repeated calls without retaining their execution order.
+
+    Counts and graph edges remain exact when the stream parser succeeds; depth
+    is unavailable because the top-level operation sequence is discarded.
+    """
     macros, top = _stream_structure(text, deadline)
     counts, graph, twoq_graph = Counter(), Counter(), Counter()
     summaries = {}

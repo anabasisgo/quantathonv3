@@ -75,6 +75,7 @@ def _evaluate(expr: str, env: dict) -> float:
 
 
 def _split(s):
+    """Split comma-separated operands while respecting nested angle expressions."""
     if '(' not in s and ')' not in s:
         parts = [part.strip() for part in s.split(',')]
         if parts and not parts[-1]:
@@ -94,6 +95,8 @@ def _split(s):
 
 
 class Circuit:
+    """Bounded probe parse: qubit count, flattened operations, and coverage flags."""
+
     def __init__(self):
         self.n = 0
         self.ops = []            # (name, qubit tuple, params tuple), 1q/2q only
@@ -111,6 +114,11 @@ class _Full(Exception):
 
 
 def parse(text: str, max_chars: int, max_ops: int) -> Circuit:
+    """Expand QASM into ordered one- and two-qubit probe operations.
+
+    Read at most ``max_chars`` input characters and emit at most ``max_ops``
+    operations. ``total_statements`` still counts the full input for coverage.
+    """
     C = Circuit()
     C.total_statements = text.count(';')
     if len(text) > max_chars:

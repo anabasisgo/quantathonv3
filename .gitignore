@@ -1,4 +1,4 @@
-/misc
+.venv/
 __pycache__/
 *.pyc
 quantathon-harness/submission.csv

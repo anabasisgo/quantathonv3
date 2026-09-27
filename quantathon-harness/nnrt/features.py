@@ -14,6 +14,11 @@ NAN = float('nan')
 
 
 def featurize(qasm_text: str) -> dict:
+    """Combine compact, bound, and MPS features, recording elapsed time per stage.
+
+    Missing stages return NaNs for network imputation. The probe runs only when
+    compact extraction finishes before the configured watchdog threshold.
+    """
     t0 = time.perf_counter()
     feats = compact_features(qasm_text, budget_s=config.EXTRACTOR_BUDGET_S)
     t1 = time.perf_counter()

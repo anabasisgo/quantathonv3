@@ -31,7 +31,10 @@ MLPs (1024-512-256, GELU) on log10 seconds (`nnrt/network.py`, numpy only). Trai
 33 timeouts and one over-cap success at the 14,400 s cap. `folds.csv` holds the team's structural 5-fold split
 (all thresholds of a circuit and its structural duplicates are held out together).
 
-## Current numbers (26 Sep 2026, 2-core cloud VM, CPU only)
+## Recorded baseline (26 Sep 2026, 2-core cloud VM, CPU only)
+
+These measurements predate the parser and probe optimizations; rerun the timing
+script on the target machine for current per-stage numbers.
 
 - **Grouped 5-fold CV** (`cross_validate.py`): score **94.81** (t=16 95.44, t=64 94.70, t=512 94.18); R² on log10 runtime 0.960;
   91.5% of completed runs within 2×, 99.0% within 10×; 10 of 33 timeouts predicted at the cap, 1 false timeout.

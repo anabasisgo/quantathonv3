@@ -1,4 +1,4 @@
-# Vendored from the team feature pipeline (data_first/feature_v3/graph_features.py), unchanged except this header.
+# Vendored from the team feature pipeline (data_first/feature_v3/graph_features.py); local docstrings added.
 """Deterministic graph proxies; no claim about the simulator's internal order.
 
 Edges contain [qubit_a, qubit_b, operation multiplicity]. RCM uses an unweighted
@@ -10,6 +10,7 @@ import math
 
 
 def reverse_cuthill_mckee(n, edges):
+    """Order qubits by a deterministic RCM traversal of the interaction graph."""
     adjacency = [set() for _ in range(n)]
     for a, b, weight in edges:
         if a != b and weight > 0:
@@ -33,6 +34,7 @@ def reverse_cuthill_mckee(n, edges):
 
 
 def quantile(values, p):
+    """Linearly interpolate the ``p`` quantile, returning zero for no values."""
     if not values:
         return 0.0
     values = sorted(values)
@@ -42,6 +44,7 @@ def quantile(values, p):
 
 
 def ordering_features(n, edges, order):
+    """Summarize weighted edge spans and cut loads in the given qubit order."""
     position = {q: p for p, q in enumerate(order)}
     delta = [0] * (n + 1)
     total = span_sum = max_span = distant = 0
@@ -70,6 +73,7 @@ def ordering_features(n, edges, order):
 
 
 def graph_features(n, edges):
+    """Compute interaction and layout proxies from weighted qubit edges."""
     adjacency = [set() for _ in range(n)]
     for a, b, weight in edges:
         if a == b or not (0 <= a < n and 0 <= b < n) or weight <= 0:
