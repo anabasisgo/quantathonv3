@@ -1,1 +1,13 @@
 /misc
+
+# Participant outputs and local environments
+submission.csv
+*_input_check.json
+*_submission_check.json
+.venv/
+.analysis-deps/
+.env
+.env.*
+wandb/
+__pycache__/
+*.pyc

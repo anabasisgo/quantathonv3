@@ -1,0 +1,33 @@
+{
+  "bundle_source": "local modeling_v5/final_model.json (research artifact not included in this branch)",
+  "bundle_sha256": "78a471bff7f7b8c3c534d531d09f07d3ad8b6af76bfb4b368e999d117a53ef7a",
+  "model_sha256": "edafe779e6633af77c797ba45e3d0ad46c3f07069d9358b9603068c3c3cdb1d4",
+  "model_bytes": 9013470,
+  "unmodified_harness": {
+    "run.py": {
+      "original_sha256": "0fc4450136edbd704c3d0cb6f600dfd55d55db71348acbb5d147bcd0605db727",
+      "copy_sha256": "0fc4450136edbd704c3d0cb6f600dfd55d55db71348acbb5d147bcd0605db727"
+    },
+    "score.py": {
+      "original_sha256": "7cc8b8156fa91ed38c2e810af5e9b85d0d4607434ef7a3c24cd69b52f882ae9c",
+      "copy_sha256": "7cc8b8156fa91ed38c2e810af5e9b85d0d4607434ef7a3c24cd69b52f882ae9c"
+    },
+    "requirements.txt": {
+      "original_sha256": "eaba8fce50be4cf83956b3a90fda979524571d8a79d65bebc896954b575dbc2d",
+      "copy_sha256": "eaba8fce50be4cf83956b3a90fda979524571d8a79d65bebc896954b575dbc2d"
+    }
+  },
+  "runtime_dependencies": "model.py: standard library only; original run.py: zstandard for .zst",
+  "training_scope": "all 532 circuits / 1497 labeled rows, after internal holdout evaluation",
+  "selected_config": {
+    "name": "generic_timeout_depth_fallback",
+    "kind": "extra_trees",
+    "features": "generic",
+    "timeout": true,
+    "timeout_cutoff": 0.25,
+    "missing_fallback": true,
+    "fallback_routes": [
+      "counts_only"
+    ]
+  }
+}
