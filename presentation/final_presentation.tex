@@ -1,0 +1,212 @@
+\documentclass[10pt,aspectratio=169]{beamer}
+\usetheme{Boadilla}
+\usepackage{graphicx,booktabs,tikz,array}
+\usetikzlibrary{arrows.meta,positioning,calc}
+\definecolor{ModelNavy}{HTML}{244A73}
+\definecolor{ModelTeal}{HTML}{008575}
+\definecolor{ModelRed}{HTML}{BC5046}
+\setbeamercolor{structure}{fg=ModelNavy}
+\setbeamercolor{frametitle}{bg=ModelNavy,fg=white}
+\setbeamercolor{title}{fg=ModelNavy}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+\setbeamersize{text margin left=0.65cm,text margin right=0.65cm}
+\setbeamertemplate{itemize items}[circle]
+\graphicspath{{final-presentation-figures/}{reports/final-presentation-figures/}}
+\IfFileExists{final-presentation-figures/numbers.tex}{\input{final-presentation-figures/numbers.tex}}{\input{reports/final-presentation-figures/numbers.tex}}
+\newcommand{\source}[1]{\par\vspace{1mm}{\tiny\color{gray}#1}}
+\newcommand{\takeaway}[1]{\par\smallskip{\color{ModelTeal}\bfseries #1}\par\smallskip}
+\tikzset{box/.style={draw=ModelNavy,rounded corners,fill=ModelNavy!5,align=center,minimum height=0.8cm,font=\small},arr/.style={-{Stealth},thick,ModelNavy}}
+\title{Quantum Circuit Runtime Inference}
+\subtitle{SC Quantathon v3}
+\date{}
+\author{Team ``Hit the Quant''}
+\begin{document}
+
+\begin{frame}
+\titlepage
+\end{frame}
+
+\begin{frame}{The Problem}
+\begin{itemize}
+\item \textbf{Schedule jobs:} Useful for separating out short runs from long runs
+\item \textbf{Plan capacity:} Can be used to estimate queue time and CPU demand for customers
+\item \textbf{Screen expensive jobs:} Flags jobs with excessive runtime before launch
+\item \textbf{Compare settings:} Estimate runtime for each of the supported threshold
+\end{itemize}
+
+Good estimation can lead to fewer failed jobs, better completion-time estimates, and less wasted compute.
+\end{frame}
+
+\begin{frame}{The Challenge}
+\begin{itemize}
+\item \textbf{Input:} OpenQASM circuit + simulator threshold.
+\begin{itemize}
+\item Threshold controls tradeoff between efficiency/accuracy
+\end{itemize}
+\item \textbf{Output:} estimated runtime of program
+\item \textbf{Constraints:} 15-second limit for each circuit
+\end{itemize}\par
+\vspace{1em}
+\centering
+\begin{tikzpicture}[node distance=0.75cm,
+    box/.style={draw, rectangle, rounded corners, align=center, inner sep=4pt},
+    arr/.style={->, thick}]
+    
+% first level
+\node[box] (a) {Same circuit file};
+
+% second level – three thresholds
+\node[box, below left=of a] (b1) {Threshold: 16};
+\node[box, below=of a]      (b2) {Threshold: 64};
+\node[box, below right=of a] (b3) {Threshold: 512};
+
+% third level – three runtimes
+\node[box, below=of b1] (c1) {Runtime $a$};
+\node[box, below=of b2]      (c2) {Runtime $b$};
+\node[box, below=of b3] (c3) {Runtime $c$};
+
+% arrows
+\draw[arr] (a) -- (b1);
+\draw[arr] (a) -- (b2);
+\draw[arr] (a) -- (b3);
+
+\draw[arr] (b1) -- (c1);
+\draw[arr] (b2) -- (c2);
+\draw[arr] (b3) -- (c3);
+\end{tikzpicture}\par
+\smallskip
+\end{frame}
+
+\begin{frame}{Training data: runtime depends on the simulator setting}
+\centering
+% \includegraphics[width=.87\textwidth,height=4.45cm,keepaspectratio]{runtime-distribution.pdf}
+\begin{itemize}
+\item \textbf{532 circuits files; 1,497 labels:} 1,464 completed runs and 33 timeouts.
+\item Provided with circuit ID, threshold, duration/status
+\item Fixed information: backend (CPU simulator), single precision, shots
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+    \vspace*{\fill}        % push content to vertical centre
+    \centering
+    {\Huge Tested Workflows}\\[1.5ex]   % huge, bold, centered
+    \vspace*{\fill}
+\end{frame}
+
+\begin{frame}{Tested Workflows: Gaussian Fit}
+\end{frame}
+
+\begin{frame}{Tested Workflows: Graph Transformer}
+\end{frame}
+
+\begin{frame}{Tested Workflows: $k$-Nearest Neighbors}
+\end{frame}
+
+\begin{frame}{Tested Workflows: ExtraTrees + Regression Model}
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm]
+\node[box,text width=2.3cm] (input) at (0,0) {Circuit file\\+ threshold};
+\node[box,text width=2.7cm] (features) at (3.4,0) {Extract structure\\121 circuit features\\+ 2 setting inputs};
+\node[box,text width=2.4cm] (class) at (6.9,0) {ExtraTrees classifier\\Fast / regular / timeout};
+\node[box,text width=2.5cm,fill=ModelTeal!10] (timeout) at (10.7,1.5) {Likely timeout\\Return 14,400 s};
+\node[box,text width=2.5cm] (expert) at (10.7,0) {Fast or regular\\regression model};
+\node[box,text width=2.5cm] (fallback) at (10.7,-1.5) {Uncertain class\\General regression};
+\draw[arr] (input)--(features); \draw[arr] (features)--(class);
+\draw[arr] (class.east)--++(.35,0)|-(timeout.west);
+\draw[arr] (class)--(expert);
+\draw[arr] (class.east)--++(.35,0)|-(fallback.west);
+\end{tikzpicture}
+\vspace{.25cm}
+\begin{itemize}
+\item \textbf{ExtraTrees:} many randomized decision trees combine their estimates.
+\item Classifier routes the job and a specialist estimates duration on a log scale
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Tested Workflows: Mock Simulator + Neural Network}
+\end{frame}
+
+\begin{frame}
+    \vspace*{\fill}        % push content to vertical centre
+    \centering
+    {\Huge Final Model Statistics}\\[1.5ex]   % huge, bold, centered
+    \vspace*{\fill}
+\end{frame}
+
+\begin{frame}{Model Runtime}
+\centering
+% \includegraphics[width=.92\textwidth,height=4.4cm,keepaspectratio]{estimation-speed.pdf}
+\takeaway{Mean extraction + one prediction: \MeanEstimate\ s\quad |\quad Maximum: \MaxEstimate\ s}
+\begin{itemize}
+\item Prediction alone averages \MeanPredict\ ms; features are reused across settings.
+\item Measured across 532 circuits and 1,596 predictions on this local machine.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Model Validation Scores}
+\centering
+% \includegraphics[width=.93\textwidth,height=4.6cm,keepaspectratio]{prediction-quality.pdf}
+\begin{itemize}
+\item \textbf{Challenge score: \ldots\%.} Rewards small proportional errors.
+\item \textbf{$R^2$: \ldots in seconds; \ldots in log seconds.} Higher means better fit.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Timeout Limitations}
+\begin{columns}[T]
+\column{.59\textwidth}
+% \includegraphics[width=\textwidth,height=4cm,keepaspectratio]{timeout-outcomes.pdf}
+\column{.38\textwidth}
+\begin{itemize}
+\item \textbf{27 of 33} timeouts flagged.
+\item \textbf{6} timeouts missed.
+\item \textbf{14} completed runs also flagged; one exceeded four hours.
+\item Use the signal to trigger review before rejecting a job.
+\end{itemize}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Other Limitations and Future Experimentation}
+\small
+\begin{tabular}{@{}p{4.4cm}p{8.9cm}@{}}
+\toprule
+\textbf{Current limitation} & \textbf{Next exploration}\\\midrule
+Rare long runs and severe misses & Have more long-run examples, audit the largest underestimates\\[3mm]
+False timeout alarms & Tune the cost of missed timeouts versus false alarms\\[3mm]
+Only one simulator environment & Collect labels for new hardware, precision, and shot counts; retrain before use\\[3mm]
+\end{tabular}
+\smallskip
+\begin{itemize}
+\item Experiment with different combinations of models to improve runtime predictions
+\item Classifying jobs based on model strengths and routing it to the respective models
+\item Testing with a larger dataset
+\end{itemize}
+\end{frame}
+
+\appendix
+\begin{frame}{Reference: Model Settings and Score Interpretation}
+\begin{columns}[T]
+\column{.54\textwidth}
+\textbf{Final model}
+\begin{itemize}
+\item Architecture: \ldots
+\item Fast class: \ldots
+\item Timeout score $\geq \ldots$: return cap.
+\end{itemize}
+\column{.43\textwidth}
+\textbf{Challenge scoring}
+\[
+ s=\max\left(0,1-\frac{|\log_{10}(\hat t/t)|}{2}\right)
+\]
+\begin{tikzpicture}[x=.43cm,y=.022cm]
+\draw[->,gray] (0,0)--(11,0);
+\foreach \x/\h/\lab/\val in {1/100/Exact/100,4/84.95/2$\times$/85,7/50/10$\times$/50,10/0/100$\times$/0}{
+\fill[ModelTeal] (\x-.6,0) rectangle (\x+.6,\h);
+\node[font=\scriptsize,above] at (\x,\h) {\val\%};
+\node[font=\scriptsize,below] at (\x,-4) {\lab};}
+\end{tikzpicture}
+\end{columns}
+\end{frame}
+\end{document}
