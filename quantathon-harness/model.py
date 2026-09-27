@@ -1,5 +1,6 @@
 """OpenQASM feature extraction and compact log-runtime model."""
 
+import gzip
 import json
 import math
 import re
@@ -9,7 +10,6 @@ from pathlib import Path
 from tree_runtime import RuntimeModel as TreeRuntimeModel
 
 CAP_SECONDS = 4 * 60 * 60
-TIMEOUT_CUTOFF = {16: 14000.0, 64: 14399.99, 512: 12500.0}
 FEATURES = (
     "log_qubits", "log_ops", "log_depth", "log_1q", "log_2q",
     "log_multi", "log_cx", "log_swap", "log_measure", "log_reset",
@@ -239,6 +239,13 @@ class RuntimeModel:
         self.model = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
         tree_dir = None if Path(artifacts_dir) == Path("artifacts") else artifacts_dir
         self.tree_model = TreeRuntimeModel(artifacts_dir=tree_dir)
+        timeout_path = Path(artifacts_dir) / "timeout-classifier.json.gz"
+        if not timeout_path.exists():
+            timeout_path = Path(__file__).resolve().parent / artifacts_dir / "timeout-classifier.json.gz"
+        with gzip.open(timeout_path, "rt", encoding="utf-8") as stream:
+            self.timeout_model = json.load(stream)
+        if self.timeout_model.get("kind") != "knn-timeout-v1":
+            raise ValueError("Unsupported timeout classifier artifact")
 
     def featurize(self, qasm_text: str) -> dict:
         return {"knn": featurize(qasm_text),
@@ -261,10 +268,28 @@ class RuntimeModel:
             return float(CAP_SECONDS)
         return float(max(0.001, 10 ** log_seconds))
 
+    def _timeout_probability(self, features: dict, threshold: int) -> float:
+        """Estimate timeout probability from labeled neighboring circuits."""
+        bank = self.timeout_model["by_threshold"].get(str(threshold))
+        if bank is None:
+            return 0.0
+        vector = _knn_vector(features)
+        distances = []
+        for candidate, timeout in zip(bank["vectors"], bank["timeout"]):
+            distance_sq = sum((((a - b) / scale) * weight) ** 2
+                              for a, b, scale, weight in zip(
+                                  vector, candidate, bank["scale"], bank["feature_weights"]))
+            distances.append((distance_sq, timeout))
+        distances.sort(key=lambda item: item[0])
+        neighbors = distances[:self.timeout_model["k"]]
+        power = self.timeout_model["distance_power"] / 2.0
+        weights = [1.0 / max(distance_sq, 1e-8) ** power for distance_sq, _ in neighbors]
+        return sum(weight * timeout for weight, (_, timeout) in zip(weights, neighbors)) / sum(weights)
+
     def predict(self, features: dict, threshold: int) -> float:
-        """Blend held-out complementary models; cap only high-confidence KNN risks."""
-        knn_seconds = self._predict_knn(features["knn"], threshold)
-        if knn_seconds >= TIMEOUT_CUTOFF.get(threshold, CAP_SECONDS):
+        """Use the learned timeout classifier, then blend runtime estimates."""
+        if self._timeout_probability(features["knn"], threshold) >= self.timeout_model["decision_probability"]:
             return float(CAP_SECONDS)
+        knn_seconds = self._predict_knn(features["knn"], threshold)
         tree_seconds = self.tree_model.predict(features["tree"], threshold)
         return float(min(CAP_SECONDS, math.sqrt(knn_seconds * tree_seconds)))
