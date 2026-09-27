@@ -170,34 +170,7 @@ Good estimation can lead to fewer failed jobs, better completion-time estimates,
 
 \begin{frame}{Tested Workflows: Mock Simulator + Neural Network}
 \centering
-\begin{tikzpicture}[x=1cm,y=1cm,>=Stealth,
-  flow/.style={draw=ModelNavy,rounded corners=2pt,fill=ModelNavy!6,align=center,
-    font=\scriptsize,inner sep=3pt,minimum height=0.68cm},
-  stage/.style={draw=ModelNavy,rounded corners=2pt,fill=white,align=center,
-    font=\scriptsize,inner sep=3pt,minimum height=0.72cm},
-  link/.style={-{Stealth},thick,ModelNavy},
-  tag/.style={font=\scriptsize\bfseries,text=ModelNavy}]
-% Feature extraction branches
-\node[flow,text width=1.35cm] (qasm) at (.85,2.5) {QASM text\\2 or 3, up to 218M chars};
-\node[flow,text width=2.35cm] (parsera) at (4.05,3.55) {\textbf{Parser A} (team v3 extractor)\\Exact path $\leq$4M chars, else streaming\\6 s budget $\to$ 26 compact features};
-\node[flow,text width=2.35cm] (parserb) at (4.05,1.35) {\textbf{Parser B} (probe parser)\\First 2M chars, $\leq$150k ops\\Expand macros; evaluate angles};
-\node[stage,text width=1.65cm] (bound) at (7.0,1.35) {Structural bound\\per-cut $\log_2\chi$ at $t=16,64,512$};
-\node[stage,text width=1.65cm] (mps) at (9.35,1.35) {MPS probe, $\chi=16$\\canonical SVDs\\work budget $\leq 1$};
-\node[flow,text width=10.75cm,minimum height=.57cm] (features) at (6.7,.05) {\textbf{44 features:} 26 compact $\oplus$ 10 bound $\oplus$ 8 probe \quad (missing values remain NaN)};
-\draw[link] (qasm.east)--++(.25,0)|-(parsera.west);
-\draw[link] (qasm.east)--++(.25,0)|-(parserb.west);
-\draw[link] (parserb)--(bound); \draw[link] (bound)--(mps);
-\draw[link] (parsera.east)--++(.35,0)|-([xshift=4.5cm]features.north west);
-\draw[link] (bound.south)--([xshift=5.7cm]features.north west);
-\draw[link] (mps.south)--([xshift=8.6cm]features.north west);
-% Prediction pipeline
-\node[stage,text width=2.0cm] (prep) at (1.85,-1.25) {Preprocess\\signed $\log(1+|x|)$, median impute, standardize};
-\node[stage,text width=1.75cm] (threshold) at (4.55,-1.25) {$+$ threshold\\one-hot (16/64/512)\\ordinal $\{-1,0,1\}$};
-\node[stage,text width=2.6cm] (mlp) at (7.8,-1.25) {5 MLPs, 1024-512-256\\GELU; smooth-L1 on $\log_{10}T$\\seeds 0--4, mean};
-\node[flow,text width=2.0cm,fill=ModelTeal!12] (prediction) at (10.75,-1.25) {Prediction\\$\hat T=10^{\hat y}$ seconds\\$\geq14{,}400$ s = timeout};
-\draw[link] (features.south)--(features.south |- prep.north);
-\draw[link] (prep)--(threshold); \draw[link] (threshold)--(mlp); \draw[link] (mlp)--(prediction);
-\end{tikzpicture}
+\includegraphics[width=\textwidth,height=5.5cm,keepaspectratio]{assets/nn_pipeline.pdf}
 \end{frame}
 
 \begin{frame}
