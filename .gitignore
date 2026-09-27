@@ -1,1 +1,6 @@
 /misc
+__pycache__/
+*.pyc
+quantathon-harness/submission.csv
+training/cv_predictions.csv
+training/timing.csv

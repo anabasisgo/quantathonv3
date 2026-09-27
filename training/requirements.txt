@@ -1,0 +1,5 @@
+# Training only (not needed to run the harness)
+numpy>=1.24
+pandas>=2.0
+torch>=2.2
+zstandard>=0.22
