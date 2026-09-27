@@ -200,7 +200,19 @@ Good estimation can lead to fewer failed jobs, better completion-time estimates,
 
 \begin{frame}{Tested Workflows: Mock Simulator + Neural Network}
 \centering
-\includegraphics[width=\textwidth,height=5.5cm,keepaspectratio]{assets/nn_pipeline.pdf}
+\vspace{.8cm}
+\begin{tikzpicture}[node distance=.45cm]
+\node[box,text width=1.7cm,minimum height=1.35cm] (input) {QASM circuit\\+ threshold};
+\node[box,text width=2cm,minimum height=1.35cm,right=of input] (parse) {Extract circuit\\features};
+\node[box,text width=2.3cm,minimum height=1.35cm,right=of parse] (features) {44 features\\+ threshold inputs};
+\node[box,text width=2cm,minimum height=1.35cm,right=of features] (model) {Neural network\\ensemble};
+\node[box,fill=ModelTeal!10,text width=1.7cm,minimum height=1.35cm,right=of model] (output) {Runtime\\estimate};
+\draw[arr] (input)--(parse);
+\draw[arr] (parse)--(features);
+\draw[arr] (features)--(model);
+\draw[arr] (model)--(output);
+\end{tikzpicture}
+\vspace{.8cm}
 \takeaway{Challenge score: 94.81\%}
 \end{frame}
 
@@ -264,7 +276,6 @@ Entanglement probe & 8 & How much entanglement \emph{does} build up, and how fas
 \item \textbf{10 of 33} timeouts predicted at or above the 4-hour cap.
 \item \textbf{25 of 33} timeout predictions landed within $2\times$ of the cap; mean timeout score was 88.0\%.
 \item \textbf{1 of 1,464} successful runs was predicted at or above the cap.
-\item Cap predictions are a review signal; the model predicts runtime continuously.
 \end{itemize}
 \end{columns}
 \end{frame}
