@@ -140,7 +140,7 @@ Good estimation can lead to fewer failed jobs, better completion-time estimates,
 % \includegraphics[width=.92\textwidth,height=4.4cm,keepaspectratio]{estimation-speed.pdf}
 \takeaway{Mean extraction + one prediction: \MeanEstimate\ s\quad |\quad Maximum: \MaxEstimate\ s}
 \begin{itemize}
-\item Prediction alone averages \MeanPredict\ ms; features are reused across settings.
+\item Prediction takes a median 13 ms per call; features are reused across settings.
 \item Measured across 532 circuits and 1,596 predictions on this local machine.
 \end{itemize}
 \end{frame}
@@ -149,8 +149,8 @@ Good estimation can lead to fewer failed jobs, better completion-time estimates,
 \centering
 % \includegraphics[width=.93\textwidth,height=4.6cm,keepaspectratio]{prediction-quality.pdf}
 \begin{itemize}
-\item \textbf{Challenge score: \ldots\%.} Rewards small proportional errors.
-\item \textbf{$R^2$: \ldots in seconds; \ldots in log seconds.} Higher means better fit.
+\item \textbf{Challenge score: 94.81\%.} Grouped five-fold cross-validation; rewards small proportional errors.
+\item \textbf{$R^2$: 0.806 in seconds; 0.960 in log seconds.} Completed runs; higher means better fit.
 \end{itemize}
 \end{frame}
 
@@ -160,10 +160,10 @@ Good estimation can lead to fewer failed jobs, better completion-time estimates,
 % \includegraphics[width=\textwidth,height=4cm,keepaspectratio]{timeout-outcomes.pdf}
 \column{.38\textwidth}
 \begin{itemize}
-\item \textbf{27 of 33} timeouts flagged.
-\item \textbf{6} timeouts missed.
-\item \textbf{14} completed runs also flagged; one exceeded four hours.
-\item Use the signal to trigger review before rejecting a job.
+\item \textbf{10 of 33} timeouts predicted at or above the 4-hour cap.
+\item \textbf{25 of 33} timeout predictions landed within $2\times$ of the cap; mean timeout score was 88.0\%.
+\item \textbf{1 of 1,464} successful runs was predicted at or above the cap.
+\item Cap predictions are a review signal; the model predicts runtime continuously.
 \end{itemize}
 \end{columns}
 \end{frame}
@@ -191,9 +191,9 @@ Only one simulator environment & Collect labels for new hardware, precision, and
 \column{.54\textwidth}
 \textbf{Final model}
 \begin{itemize}
-\item Architecture: \ldots
-\item Fast class: \ldots
-\item Timeout score $\geq \ldots$: return cap.
+\item Architecture: 5-seed MLP ensemble (48--1024--512--256--1).
+\item Fast class: none; predicts runtime continuously.
+\item Timeout indicator: prediction $\geq 14{,}400$ s.
 \end{itemize}
 \column{.43\textwidth}
 \textbf{Challenge scoring}
