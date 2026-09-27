@@ -9,9 +9,10 @@ This harness produces the **one file you send back to us**.
 pip install -r requirements.txt
 ```
 
-## What you edit
+## Model code
 
-**Only `model.py`.** Implement these methods:
+`model.py` exposes these methods to the harness. The implementation lives in
+`nnrt/` and loads the trained weights from `artifacts/`.
 
 | Method | Job | Called |
 |---|---|---|
@@ -22,8 +23,7 @@ pip install -r requirements.txt
 There is no timeout flag — if you think a run will time out, just predict a duration
 **≥ the 4-hour cap (14400 s)**.
 
-A trivial baseline is already in `model.py` so the harness runs before you touch
-anything. Replace its body with your real parser and model.
+This branch includes the trained NN A model.
 
 **Caps:** `featurize` and `predict` must each run in **≤ 15 s per circuit**. The
 harness times you and warns on anything over.
